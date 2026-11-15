@@ -20,6 +20,10 @@ There is no XP, no levels and no scores. Real progress is not a number; the tree
 - **Five looks**: Classic, Night sky, Old map, Blueprint and Neon. **Two node shapes**: stars with a label or boxes with the text inside. Every combination works in every layout.
 - **Prerequisites without spaghetti**: a skill needs *all* (`A & B`) or *any* (`A | B`) of other skills. Hover a skill to highlight what it requires.
 - **Skill card**: hover shows status, description, progress and requirements; click pins the card, with a button to open the note.
+- **Change status from the card**: pin a skill and press 🔒 ✨ 🔥 ✅ ⭐; the checkbox in the note is updated for you.
+- **What's next**: a panel with everything you are learning and everything that is unlocked, across all branches.
+- **Find a skill**: type a name and the view flies to it. Both are also commands you can bind to hotkeys.
+- **Constellation tabs** show how many skills of each constellation you know.
 - **Available skills glow** when their requirements are met.
 - Ctrl/Cmd+click opens the note at that line. Pan by dragging, zoom with the wheel.
 - Remembers the last opened tree, layout and constellation.
