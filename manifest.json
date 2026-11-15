@@ -1,0 +1,10 @@
+{
+  "id": "skill-tree",
+  "name": "Skill Tree",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "See yourself as an RPG character: skill trees and constellations built from checklists in your notes, without XP or levels.",
+  "author": "Talmagett",
+  "authorUrl": "https://github.com/Talmagett",
+  "isDesktopOnly": false
+}
