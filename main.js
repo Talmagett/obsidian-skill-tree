@@ -1,9 +1,9 @@
 /* Skill Tree — an RPG-style skill tree built from your notes (plain JS, no bundler) */
-const { Plugin, ItemView, PluginSettingTab, Setting, Notice, TFile, TFolder, debounce, normalizePath, moment } = require("obsidian");
+const { Plugin, ItemView, PluginSettingTab, Setting, Notice, TFile, TFolder, debounce, normalizePath, moment, setIcon } = require("obsidian");
 
 const VIEW_TYPE = "skill-tree-view";
 const MAP = "__map__";
-const DEFAULT_SETTINGS = { folder: "Skills", mapFile: "Map.md" };
+const DEFAULT_SETTINGS = { folder: "Skills", mapFile: "Map.md", style: "classic", bar: "tabs" };
 
 const NODE_W = 170;
 const NODE_H = 44;
@@ -19,7 +19,8 @@ const STRINGS = {
   en: {
     mastered: "⭐ mastered", known: "✅ known", learning: "🔥 learning", want: "✨ want", locked: "🔒 locked", branch: "branch",
     available: "🔓 available", wantAvailable: "✨ want · available",
-    map: "🗺 Map", view: "View", up: "▲ up", radial: "◎ star", vertical: "↓ top-down", horizontal: "→ left-right",
+    map: "🗺 Map", mapTab: "Map", view: "View", close: "Close", openNote: "Open note", pinHint: "Click to pin · Ctrl+click opens the note",
+    setStyle: "Look", setStyleDesc: "How the skill tree is drawn.", styleClassic: "Classic", styleSky: "Night sky", styleSoft: "Soft", up: "▲ up", radial: "◎ star", vertical: "↓ top-down", horizontal: "→ left-right",
     all: "All", grouped: "By group", fit: "⤢ fit",
     noFolder: (f) => `No branch folders in “${f}” yet.`, noNodes: "No notes with type: branch in this folder.",
     createExample: "Create example tree", exampleCreated: (f) => `Example tree created in ${f}`,
@@ -33,7 +34,8 @@ const STRINGS = {
   ru: {
     mastered: "⭐ мастер", known: "✅ умею", learning: "🔥 качаю", want: "✨ хочу", locked: "🔒 закрыт", branch: "ветка",
     available: "🔓 доступно", wantAvailable: "✨ хочу · доступно",
-    map: "🗺 Карта", view: "Вид", up: "▲ вверх", radial: "◎ звезда", vertical: "↓ сверху", horizontal: "→ слева",
+    map: "🗺 Карта", mapTab: "Карта", view: "Вид", close: "Закрыть", openNote: "Открыть заметку", pinHint: "Клик — закрепить · Ctrl+клик — открыть заметку",
+    setStyle: "Оформление", setStyleDesc: "Как рисуется дерево навыков.", styleClassic: "Классика", styleSky: "Ночное небо", styleSoft: "Мягкое", up: "▲ вверх", radial: "◎ звезда", vertical: "↓ сверху", horizontal: "→ слева",
     all: "Все", grouped: "По группам", fit: "⤢ вписать",
     noFolder: (f) => `В «${f}» пока нет папок-веток.`, noNodes: "В этой папке нет заметок с type: branch.",
     createExample: "Создать пример дерева", exampleCreated: (f) => `Пример создан в ${f}`,
@@ -515,12 +517,16 @@ class SkillTreeView extends ItemView {
     const root = this.contentEl;
     root.empty();
     root.addClass("st-root");
-    this.toolbar = root.createDiv("st-toolbar");
-    this.viewbar = root.createDiv("st-toolbar st-viewbar");
-    this.subbar = root.createDiv("st-toolbar st-subbar");
+    this.applyLook();
+    // one header row: branch tabs on the left, view tools on the right
+    const header = root.createDiv("st-header");
+    this.toolbar = header.createDiv("st-tabs");
+    this.tools = header.createDiv("st-tools");
+    this.subbar = root.createDiv("st-subbar");
     this.canvas = root.createDiv("st-canvas");
-    this.tooltip = root.createDiv("st-tooltip");
+    this.tooltip = root.createDiv("st-card");
     this.tooltip.hide();
+    this.pinned = null;
 
     this.registerEvent(this.app.metadataCache.on("changed", debounce(() => this.render(false), 400, true)));
     this.registerEvent(this.app.vault.on("rename", debounce(() => this.render(true), 400, true)));
@@ -535,9 +541,15 @@ class SkillTreeView extends ItemView {
     return f.children.filter(c => c instanceof TFolder).map(c => c.name).sort();
   }
 
+  applyLook() {
+    const s = this.plugin.settings;
+    this.contentEl.removeClass(...[...this.contentEl.classList].filter(c => c.startsWith("st-style-") || c.startsWith("st-bar-")));
+    this.contentEl.addClass(`st-style-${s.style || "classic"}`, `st-bar-${s.bar || "tabs"}`);
+  }
+
   renderEmpty() {
-    for (const el of [this.toolbar, this.viewbar, this.subbar, this.canvas]) el.empty();
-    this.viewbar.hide(); this.subbar.hide();
+    for (const el of [this.toolbar, this.tools, this.subbar, this.canvas]) el.empty();
+    this.subbar.hide();
     const box = this.canvas.createDiv("st-empty");
     box.createEl("p", { text: t("noFolder", this.root) });
     const btn = box.createEl("button", { text: t("createExample"), cls: "mod-cta" });
@@ -547,36 +559,39 @@ class SkillTreeView extends ItemView {
   renderToolbar() {
     this.toolbar.empty();
     const list = this.branches();
+    this.tools.empty();
     if (!list.length) { this.branch = null; return false; }
-    this.viewbar.show();
     if (!list.includes(this.branch) && this.branch !== MAP) this.branch = MAP;
-    const mapBtn = this.toolbar.createEl("button", { text: t("map"), cls: this.branch === MAP ? "mod-cta" : "" });
-    mapBtn.onclick = () => { this.branch = MAP; this.render(true); };
-    for (const b of list) {
-      const btn = this.toolbar.createEl("button", { text: b, cls: b === this.branch ? "mod-cta" : "" });
-      btn.onclick = () => { this.branch = b; this.render(true); };
-    }
-    // view row: layout modes + fit
-    this.viewbar.empty();
-    this.viewbar.createSpan({ cls: "st-bar-label", text: t("view") });
+
+    const tab = (label, active, onClick, icon) => {
+      const el = this.toolbar.createDiv({ cls: "st-tab" + (active ? " is-active" : "") });
+      if (icon) setIcon(el.createSpan("st-tab-icon"), icon);
+      el.createSpan({ text: label });
+      el.onclick = onClick;
+    };
+    tab(t("mapTab"), this.branch === MAP, () => { this.branch = MAP; this.render(true); }, "map");
+    for (const b of list) tab(b, b === this.branch, () => { this.branch = b; this.render(true); });
+
+    const tool = (parent, icon, label, active, onClick) => {
+      const el = parent.createDiv({ cls: "st-tool clickable-icon" + (active ? " is-active" : ""), attr: { "aria-label": label } });
+      setIcon(el, icon);
+      el.onclick = onClick;
+      return el;
+    };
+    const modes = this.tools.createDiv("st-tool-group");
+    const icons = { up: "chevrons-up", radial: "sun", vertical: "chevrons-down", horizontal: "chevrons-right" };
     for (const m of ["up", "radial", "vertical", "horizontal"]) {
-      const btn = this.viewbar.createEl("button", { text: t(m), cls: m === this.mode ? "mod-cta" : "" });
-      btn.onclick = () => { this.mode = m; this.render(true); };
+      tool(modes, icons[m], t(m), m === this.mode, () => { this.mode = m; this.render(true); });
     }
     if (this.branch !== MAP) {
-      this.viewbar.createSpan({ cls: "st-bar-sep" });
-      for (const [g, label] of [[false, t("all")], [true, t("grouped")]]) {
-        const btn = this.viewbar.createEl("button", { text: label, cls: g === this.grouped ? "mod-cta" : "" });
-        btn.onclick = () => { this.grouped = g; this.render(true); };
-      }
+      tool(this.tools, "layers", this.grouped ? t("all") : t("grouped"), this.grouped, () => { this.grouped = !this.grouped; this.render(true); });
     }
-    const fit = this.viewbar.createEl("button", { text: t("fit"), cls: "st-fit" });
-    fit.onclick = () => this.fit();
+    tool(this.tools, "maximize", t("fit"), false, () => this.fit());
     return true;
   }
 
   async render(refit) {
-    this.viewbar.empty();
+    this.unpin();
     if (!this.renderToolbar()) return this.renderEmpty();
     if (this.branch === MAP) return this.renderMap(refit);
     const nodes = await buildGraph(this.app, `${this.root}/${this.branch}`);
@@ -595,8 +610,8 @@ class SkillTreeView extends ItemView {
       if (cons.length) {
         if (!cons.some(c => c.id === this.constellation)) this.constellation = cons[0].id;
         for (const c of cons) {
-          const btn = this.subbar.createEl("button", { text: c.name, cls: c.id === this.constellation ? "mod-cta" : "" });
-          btn.onclick = () => { this.constellation = c.id; this.render(true); };
+          const chip = this.subbar.createDiv({ text: c.name, cls: "st-chip" + (c.id === this.constellation ? " is-active" : "") });
+          chip.onclick = () => { this.constellation = c.id; this.render(true); };
         }
         const keep = new Set([this.constellation]);
         for (let grew = true; grew;) {
@@ -658,9 +673,14 @@ class SkillTreeView extends ItemView {
       const text = document.createElementNS(NS, "text");
       text.setAttribute("text-anchor", "middle"); text.setAttribute("dominant-baseline", "central");
       if (radial) {
-        // star: circle + label underneath
+        // star: solid underlay (hides edges behind the node) + circle + label underneath
+        const u = document.createElementNS(NS, "circle");
+        u.setAttribute("r", R(n));
+        u.setAttribute("class", "st-under");
+        ng.appendChild(u);
         const c = document.createElementNS(NS, "circle");
         c.setAttribute("r", R(n));
+        c.setAttribute("class", "st-body");
         ng.appendChild(c);
         text.setAttribute("y", R(n) + 12);
         text.setAttribute("class", "st-label");
@@ -675,10 +695,7 @@ class SkillTreeView extends ItemView {
       }
       ng.appendChild(text);
 
-      ng.addEventListener("mouseenter", (ev) => { this.showTip(n, ev); this.highlight(n, true); });
-      ng.addEventListener("mousemove", (ev) => this.moveTip(ev));
-      ng.addEventListener("mouseleave", () => { this.tooltip.hide(); this.highlight(n, false); });
-      ng.addEventListener("click", (ev) => { ev.stopPropagation(); this.openNode(n); });
+      this.bindNode(ng, n);
       g.appendChild(ng);
     }
 
@@ -727,8 +744,13 @@ class SkillTreeView extends ItemView {
       const cls = n.kind === "legendary" ? `st-${n.status}` : "st-branch";
       ng.setAttribute("class", `st-node st-map-${n.kind} ${cls}` + (n.available ? " st-available" : ""));
       ng.setAttribute("transform", `translate(${n.x},${n.y})`);
+      const u = document.createElementNS(NS, "circle");
+      u.setAttribute("r", n.r);
+      u.setAttribute("class", "st-under");
+      ng.appendChild(u);
       const c = document.createElementNS(NS, "circle");
       c.setAttribute("r", n.r);
+      c.setAttribute("class", "st-body");
       if (n.stats && n.stats.total) {
         // brighter = more skills you already have (st-p-0 … st-p-10)
         const p = (n.stats.done + 0.5 * n.stats.learning) / n.stats.total;
@@ -748,18 +770,11 @@ class SkillTreeView extends ItemView {
       text.textContent = n.name;
       ng.appendChild(text);
 
-      ng.addEventListener("mouseenter", (ev) => { this.showTip(n, ev); this.highlight(n, true); });
-      ng.addEventListener("mousemove", (ev) => this.moveTip(ev));
-      ng.addEventListener("mouseleave", () => { this.tooltip.hide(); this.highlight(n, false); });
-      ng.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        this.tooltip.hide();
-        if (n.go) {
-          this.branch = n.go.branch;
-          if (n.go.constellation) { this.constellation = n.go.constellation; this.grouped = true; }
-          this.render(true);
-        } else this.openNode(n);
-      });
+      this.bindNode(ng, n, n.go ? () => {
+        this.branch = n.go.branch;
+        if (n.go.constellation) { this.constellation = n.go.constellation; this.grouped = true; }
+        this.render(true);
+      } : null);
       g.appendChild(ng);
     }
 
@@ -808,17 +823,18 @@ class SkillTreeView extends ItemView {
     let drag = null;
     svg.addEventListener("pointerdown", (e) => {
       if (e.target.closest(".st-node")) return;
-      drag = { x: e.clientX, y: e.clientY, vx: this.view.x, vy: this.view.y };
+      drag = { x: e.clientX, y: e.clientY, vx: this.view.x, vy: this.view.y, moved: false };
       svg.setPointerCapture(e.pointerId);
       svg.addClass("is-dragging");
     });
     svg.addEventListener("pointermove", (e) => {
       if (!drag) return;
+      if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 3) drag.moved = true;
       this.view.x = drag.vx + (e.clientX - drag.x);
       this.view.y = drag.vy + (e.clientY - drag.y);
       this.apply();
     });
-    const end = () => { drag = null; svg.removeClass("is-dragging"); };
+    const end = () => { if (drag && !drag.moved) this.unpin(); drag = null; svg.removeClass("is-dragging"); };
     svg.addEventListener("pointerup", end);
     svg.addEventListener("pointercancel", end);
     svg.addEventListener("wheel", (e) => {
@@ -847,35 +863,87 @@ class SkillTreeView extends ItemView {
     }
   }
 
-  showTip(n, ev) {
-    this.tooltip.empty();
-    this.tooltip.createDiv({ cls: "st-tip-name", text: n.name });
-    const status = n.available
-      ? (n.status === "want" ? t("wantAvailable") : t("available"))
-      : t(n.status);
-    this.tooltip.createDiv({ cls: `st-tip-status st-tip-${n.status}`, text: status });
-    if (n.desc) this.tooltip.createDiv({ cls: "st-tip-desc", text: n.desc });
+  // hover shows the card; click pins it (map branches/constellations navigate instead)
+  bindNode(ng, n, onClick) {
+    ng.addEventListener("mouseenter", (ev) => {
+      if (this.pinned) return;
+      this.showTip(n, ev); this.highlight(n, true);
+    });
+    ng.addEventListener("mousemove", (ev) => { if (!this.pinned) this.moveTip(ev); });
+    ng.addEventListener("mouseleave", () => {
+      if (this.pinned) return;
+      this.tooltip.hide(); this.highlight(n, false);
+    });
+    ng.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (onClick) { this.unpin(); this.tooltip.hide(); return onClick(); }
+      if (ev.ctrlKey || ev.metaKey) return this.openNode(n);
+      if (this.pinned === n) return this.unpin();
+      this.unpin();
+      this.pinned = n;
+      this.highlight(n, true);
+      this.showTip(n, ev, true);
+    });
+  }
+
+  unpin() {
+    if (!this.pinned) return;
+    const n = this.pinned;
+    this.pinned = null;
+    this.highlight(n, false);
+    this.tooltip.hide();
+  }
+
+  showTip(n, ev, pinned = false) {
+    const card = this.tooltip;
+    card.empty();
+    card.toggleClass("is-pinned", pinned);
+    const status = n.available ? (n.status === "want" ? t("wantAvailable") : t("available")) : t(n.status);
+    const head = card.createDiv("st-card-head");
+    head.createDiv({ cls: "st-card-name", text: n.name });
+    if (pinned) {
+      const x = head.createDiv({ cls: "st-card-close clickable-icon", attr: { "aria-label": t("close") } });
+      setIcon(x, "x");
+      x.onclick = (e) => { e.stopPropagation(); this.unpin(); };
+    }
+    if (n.status !== "branch") {
+      card.createDiv({ cls: `st-chip st-chip-${n.available ? "available" : n.status}`, text: status });
+    }
+    if (n.desc) card.createDiv({ cls: "st-card-desc", text: n.desc });
     if (n.stats) {
       const s = n.stats;
-      this.tooltip.createDiv({ cls: "st-tip-req", text: `✅ ${s.done} · 🔥 ${s.learning} · 🔒 ${s.total - s.done - s.learning}` });
+      const bar = card.createDiv("st-card-progress");
+      const seg = (cls, v) => { if (v) setVars(bar.createDiv(`st-seg ${cls}`), { "--st-w": `${(100 * v) / s.total}%` }); };
+      seg("st-seg-done", s.done); seg("st-seg-learning", s.learning);
+      card.createDiv({ cls: "st-card-meta", text: `✅ ${s.done} · 🔥 ${s.learning} · 🔒 ${s.total - s.done - s.learning}` });
     }
-    if (n.reqList && n.reqList.length) {
-      const box = this.tooltip.createDiv({ cls: "st-tip-req", text: n.op === "or" ? t("requiresAny") : t("requires") });
-      const ul = box.createEl("ul", { cls: "st-tip-extra" });
-      for (const r of n.reqList) {
-        ul.createEl("li", { text: (r.missing ? "❓ " : r.done ? "✅ " : "⬜ ") + r.name + (r.branch ? ` · ${r.branch}` : "") });
+    const reqs = n.reqList && n.reqList.length
+      ? { op: n.op, items: n.reqList.map(r => ({ name: r.name, sub: r.branch, done: r.done, missing: r.missing })) }
+      : n.reqs && (n.reqs.ids.length || n.reqs.missing.length)
+        ? { op: n.reqs.op, items: n.reqs.ids.map(id => ({ name: this.all.get(id).name, done: isDone(this.all.get(id).status) }))
+            .concat(n.reqs.missing.map(s => ({ name: s, missing: true }))) }
+        : null;
+    if (reqs) {
+      card.createDiv({ cls: "st-card-label", text: reqs.op === "or" ? t("requiresAny") : t("requires") });
+      const ul = card.createEl("ul", { cls: "st-card-reqs" });
+      for (const r of reqs.items) {
+        const li = ul.createEl("li", { cls: r.missing ? "is-missing" : r.done ? "is-done" : "" });
+        li.createSpan({ cls: "st-req-mark", text: r.missing ? "?" : r.done ? "✓" : "" });
+        li.createSpan({ text: r.name });
+        if (r.sub) li.createSpan({ cls: "st-req-sub", text: r.sub });
       }
     }
-    if (n.reqs && (n.reqs.ids.length || n.reqs.missing.length)) {
-      const parts = n.reqs.ids.map(id => (isDone(this.all.get(id).status) ? "✅ " : "⬜ ") + this.all.get(id).name)
-        .concat(n.reqs.missing.map(s => "❓ " + s));
-      this.tooltip.createDiv({ cls: "st-tip-req", text: t("requires") + " " + parts.join(n.reqs.op === "or" ? t("or") : t("and")) });
-    }
     if (n.extra && n.extra.length) {
-      const ul = this.tooltip.createEl("ul", { cls: "st-tip-extra" });
-      for (const t of n.extra) ul.createEl("li", { text: t });
+      const ul = card.createEl("ul", { cls: "st-card-notes" });
+      for (const x of n.extra) ul.createEl("li", { text: x });
     }
-    this.tooltip.show();
+    if (pinned && n.file) {
+      const btn = card.createEl("button", { cls: "st-card-open mod-cta", text: t("openNote") });
+      btn.onclick = (e) => { e.stopPropagation(); this.openNode(n); };
+    } else if (!pinned && !n.go) {
+      card.createDiv({ cls: "st-card-hint", text: t("pinHint") });
+    }
+    card.show();
     this.moveTip(ev);
   }
 
@@ -968,7 +1036,7 @@ module.exports = class SkillTreePlugin extends Plugin {
 
   refreshViews() {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
-      if (leaf.view instanceof SkillTreeView) leaf.view.render(true);
+      if (leaf.view instanceof SkillTreeView) { leaf.view.applyLook(); leaf.view.render(true); }
     }
   }
 
@@ -1012,5 +1080,9 @@ class SkillTreeSettingTab extends PluginSettingTab {
           this.plugin.settings.mapFile = v.endsWith(".md") ? v : v + ".md";
           apply();
         }));
+    new Setting(containerEl).setName(t("setStyle")).setDesc(t("setStyleDesc"))
+      .addDropdown(d => d.addOptions({ classic: t("styleClassic"), sky: t("styleSky"), soft: t("styleSoft") })
+        .setValue(this.plugin.settings.style || "classic")
+        .onChange(async v => { this.plugin.settings.style = v; await this.plugin.save(); this.plugin.refreshViews(); }));
   }
 }
