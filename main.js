@@ -871,8 +871,17 @@ class SkillTreeView extends ItemView {
   }
 
   moveTip(ev) {
+    // right/below the cursor; flip to the other side when it would leave the view
     const r = this.contentEl.getBoundingClientRect();
-    setVars(this.tooltip, { "--st-tip-x": `${ev.clientX - r.left + 14}px`, "--st-tip-y": `${ev.clientY - r.top + 14}px` });
+    const gap = 14, pad = 6;
+    const w = this.tooltip.offsetWidth, h = this.tooltip.offsetHeight;
+    const cx = ev.clientX - r.left, cy = ev.clientY - r.top;
+    let x = cx + gap, y = cy + gap;
+    if (x + w > r.width - pad) x = cx - gap - w;
+    if (y + h > r.height - pad) y = cy - gap - h;
+    x = Math.max(pad, Math.min(x, r.width - w - pad));
+    y = Math.max(pad, Math.min(y, r.height - h - pad));
+    setVars(this.tooltip, { "--st-tip-x": `${x}px`, "--st-tip-y": `${y}px` });
   }
 
   async openNode(n) {
