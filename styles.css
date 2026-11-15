@@ -42,7 +42,7 @@
 .st-svg.is-dragging { cursor: grabbing; }
 
 /* edges */
-.st-edge { fill: none; stroke: var(--background-modifier-border-hover); stroke-width: 2; }
+.st-edge { fill: none; stroke: var(--background-modifier-border-hover); stroke-width: calc(2px * var(--st-line, 1)); }
 .st-edge-extra { stroke-dasharray: 5 5; opacity: .7; }
 .st-edge-known, .st-edge-mastered { stroke: rgba(var(--color-green-rgb), .7); }
 .st-edge-learning { stroke: rgba(var(--color-yellow-rgb), .7); }
@@ -85,7 +85,7 @@
 .st-style-sky .st-node .st-under { fill: var(--st-sky); }
 .st-style-sky .st-node text { fill: #d3daf7; }
 .st-style-sky .st-node .st-label { stroke: var(--st-sky); font-size: 11px; letter-spacing: .02em; }
-.st-style-sky .st-edge { stroke: rgba(170, 190, 255, .16); stroke-width: 1.2; }
+.st-style-sky .st-edge { stroke: rgba(170, 190, 255, .16); stroke-width: calc(1.2px * var(--st-line, 1)); }
 .st-style-sky .st-edge-known, .st-style-sky .st-edge-mastered { stroke: rgba(154, 216, 255, .6); filter: drop-shadow(0 0 3px rgba(120, 200, 255, .7)); }
 .st-style-sky .st-edge-learning { stroke: rgba(255, 224, 138, .45); }
 .st-style-sky .st-node .st-body { stroke-width: 1.5; }
@@ -100,7 +100,7 @@
 
 /* ---------- look: soft ---------- */
 .st-style-soft .st-canvas { background-image: radial-gradient(var(--background-modifier-border) 1px, transparent 1px); background-size: 22px 22px; }
-.st-style-soft .st-edge { stroke: var(--background-modifier-border); stroke-width: 3.5; stroke-linecap: round; }
+.st-style-soft .st-edge { stroke: var(--background-modifier-border); stroke-width: calc(3.5px * var(--st-line, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .st-style-soft .st-edge-known, .st-style-soft .st-edge-mastered { stroke: rgba(var(--color-green-rgb), .45); }
 .st-style-soft .st-edge-learning { stroke: rgba(var(--color-yellow-rgb), .45); }
 .st-style-soft .st-node .st-body { stroke-width: 3; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .25)); }
@@ -187,3 +187,8 @@
 .st-card-meta { font-size: var(--font-ui-smaller); color: var(--text-muted); }
 .st-card-hint { font-size: var(--font-ui-smaller); color: var(--text-faint); }
 .st-card-open { align-self: flex-start; margin-top: 2px; }
+
+/* glow off */
+.st-no-glow .st-svg .st-node .st-body, .st-no-glow .st-svg .st-node .st-under { filter: none; }
+.st-no-glow .st-svg .st-edge { filter: none; }
+.st-no-glow .st-svg .st-node:hover .st-body { filter: brightness(1.3); }

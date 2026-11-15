@@ -3,7 +3,7 @@ const { Plugin, ItemView, PluginSettingTab, Setting, Notice, TFile, TFolder, deb
 
 const VIEW_TYPE = "skill-tree-view";
 const MAP = "__map__";
-const DEFAULT_SETTINGS = { folder: "Skills", mapFile: "Map.md", style: "classic", nodes: "star", starSize: 1, bar: "tabs" };
+const DEFAULT_SETTINGS = { folder: "Skills", mapFile: "Map.md", style: "classic", nodes: "star", starSize: 1, lines: "curved", lineWidth: 1, textSize: 1, glow: true, bar: "tabs" };
 
 const NODE_W = 170;
 const NODE_H = 44;
@@ -21,7 +21,7 @@ const STRINGS = {
     available: "🔓 available", wantAvailable: "✨ want · available",
     map: "🗺 Map", mapTab: "Map", view: "View", close: "Close", openNote: "Open note", pinHint: "Click to pin · Ctrl+click opens the note",
     setStyle: "Look", setStyleDesc: "How the skill tree is drawn.", styleClassic: "Classic", styleSky: "Night sky", styleSoft: "Soft",
-    setNodes: "Nodes", setNodesDesc: "Same in every layout and on the map.", nodesStar: "Stars with a label", nodesBox: "Boxes with text inside", setStarSize: "Star size", setStarSizeDesc: "For star nodes: how big the stars are.", up: "▲ up", radial: "◎ star", vertical: "↓ top-down", horizontal: "→ left-right",
+    setNodes: "Nodes", setNodesDesc: "Same in every layout and on the map.", nodesStar: "Stars with a label", nodesBox: "Boxes with text inside", setStarSize: "Star size", setStarSizeDesc: "For star nodes: how big the stars are.", setLook: "Appearance", setLines: "Lines", setLinesDesc: "Same in the trees and on the map.", linesStraight: "Straight", linesCurved: "Curved", linesAngled: "Right angles", setLineWidth: "Line thickness", setTextSize: "Text size", setTextSizeDesc: "Labels under stars and text inside boxes.", setGlow: "Glow", setGlowDesc: "Glow and shadows around nodes.", up: "▲ up", radial: "◎ star", vertical: "↓ top-down", horizontal: "→ left-right",
     all: "All", grouped: "By group", fit: "⤢ fit",
     noFolder: (f) => `No branch folders in “${f}” yet.`, noNodes: "No notes with type: branch in this folder.",
     createExample: "Create example tree", exampleCreated: (f) => `Example tree created in ${f}`,
@@ -37,7 +37,7 @@ const STRINGS = {
     available: "🔓 доступно", wantAvailable: "✨ хочу · доступно",
     map: "🗺 Карта", mapTab: "Карта", view: "Вид", close: "Закрыть", openNote: "Открыть заметку", pinHint: "Клик — закрепить · Ctrl+клик — открыть заметку",
     setStyle: "Оформление", setStyleDesc: "Как рисуется дерево навыков.", styleClassic: "Классика", styleSky: "Ночное небо", styleSoft: "Мягкое",
-    setNodes: "Узлы", setNodesDesc: "Одинаково во всех видах и на карте.", nodesStar: "Звёзды с подписью", nodesBox: "Блоки с текстом внутри", setStarSize: "Размер звёзд", setStarSizeDesc: "Для узлов-звёзд: насколько они крупные.", up: "▲ вверх", radial: "◎ звезда", vertical: "↓ сверху", horizontal: "→ слева",
+    setNodes: "Узлы", setNodesDesc: "Одинаково во всех видах и на карте.", nodesStar: "Звёзды с подписью", nodesBox: "Блоки с текстом внутри", setStarSize: "Размер звёзд", setStarSizeDesc: "Для узлов-звёзд: насколько они крупные.", setLook: "Внешний вид", setLines: "Линии", setLinesDesc: "Одинаково в деревьях и на карте.", linesStraight: "Прямые", linesCurved: "Плавные", linesAngled: "Под прямым углом", setLineWidth: "Толщина линий", setTextSize: "Размер текста", setTextSizeDesc: "Подписи под звёздами и текст в блоках.", setGlow: "Свечение", setGlowDesc: "Свечение и тени вокруг узлов.", up: "▲ вверх", radial: "◎ звезда", vertical: "↓ сверху", horizontal: "→ слева",
     all: "Все", grouped: "По группам", fit: "⤢ вписать",
     noFolder: (f) => `В «${f}» пока нет папок-веток.`, noNodes: "В этой папке нет заметок с type: branch.",
     createExample: "Создать пример дерева", exampleCreated: (f) => `Пример создан в ${f}`,
@@ -497,6 +497,33 @@ function layout(nodes, rootName, mode = "radial", box = false) {
   return { all, pos, edges };
 }
 
+/* ---------- edges ---------- */
+
+// one path for every edge: straight, curved or right-angled, the same in trees and on the map
+function edgePath(a, b, mode, shape, box) {
+  if (mode === "radial") {
+    const ra = Math.hypot(a.x, a.y), rb = Math.hypot(b.x, b.y);
+    if (shape === "straight" || ra < 1 || rb < 1) return `M${a.x},${a.y} L${b.x},${b.y}`;
+    const c = { x: b.x * ra / rb, y: b.y * ra / rb }; // a's radius at b's angle
+    if (shape === "curved") return `M${a.x},${a.y} Q${c.x},${c.y} ${b.x},${b.y}`;
+    const sweep = a.x * c.y - a.y * c.x > 0 ? 1 : 0;
+    return `M${a.x},${a.y} A${ra},${ra} 0 0 ${sweep} ${c.x},${c.y} L${b.x},${b.y}`;
+  }
+  let x1 = a.x, y1 = a.y, x2 = b.x, y2 = b.y;
+  const across = mode === "horizontal";
+  if (box) { // start and end on the box sides
+    if (across) { const d = Math.sign(x2 - x1) || 1; x1 += d * NODE_W / 2; x2 -= d * NODE_W / 2; }
+    else { const d = Math.sign(y2 - y1) || 1; y1 += d * NODE_H / 2; y2 -= d * NODE_H / 2; }
+  }
+  if (shape === "straight") return `M${x1},${y1} L${x2},${y2}`;
+  if (across) {
+    const mx = (x1 + x2) / 2;
+    return shape === "angled" ? `M${x1},${y1} H${mx} V${y2} H${x2}` : `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+  }
+  const my = (y1 + y2) / 2;
+  return shape === "angled" ? `M${x1},${y1} V${my} H${x2} V${y2}` : `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`;
+}
+
 /* ---------- view ---------- */
 
 const setVars = (el, vars) => {
@@ -551,6 +578,8 @@ class SkillTreeView extends ItemView {
     const s = this.plugin.settings;
     this.contentEl.removeClass(...[...this.contentEl.classList].filter(c => c.startsWith("st-style-") || c.startsWith("st-bar-")));
     this.contentEl.addClass(`st-style-${s.style || "classic"}`, `st-bar-${s.bar || "tabs"}`);
+    this.contentEl.toggleClass("st-no-glow", s.glow === false);
+    setVars(this.contentEl, { "--st-line": String(s.lineWidth || 1) });
   }
 
   renderEmpty() {
@@ -650,16 +679,7 @@ class SkillTreeView extends ItemView {
     for (const e of edges) {
       const a = pos.get(e.from), b = pos.get(e.to);
       if (!a || !b) continue;
-      let d;
-      if (star || this.mode === "radial") d = `M${a.x},${a.y} L${b.x},${b.y}`;
-      else if (this.mode === "horizontal") {
-        const x1 = a.x + NODE_W / 2, x2 = b.x - NODE_W / 2, mx = (x1 + x2) / 2;
-        d = `M${x1},${a.y} C${mx},${a.y} ${mx},${b.y} ${x2},${b.y}`;
-      } else {
-        const up = this.mode === "up" ? -1 : 1;
-        const y1 = a.y + up * NODE_H / 2, y2 = b.y - up * NODE_H / 2, my = (y1 + y2) / 2;
-        d = `M${a.x},${y1} C${a.x},${my} ${b.x},${my} ${b.x},${y2}`;
-      }
+      const d = edgePath(a, b, this.mode, this.plugin.settings.lines, !star);
       const path = document.createElementNS(NS, "path");
       path.setAttribute("d", d);
       path.setAttribute("class", "st-edge" + (e.primary ? "" : " st-edge-extra") + ` st-edge-${all.get(e.to).status}`);
@@ -710,14 +730,7 @@ class SkillTreeView extends ItemView {
 
     for (const [a, b] of edges) {
       const line = document.createElementNS(NS, "path");
-      let d = `M${a.x},${a.y} L${b.x},${b.y}`;
-      if (mode === "horizontal") {
-        const mx = (a.x + b.x) / 2;
-        d = `M${a.x},${a.y} C${mx},${a.y} ${mx},${b.y} ${b.x},${b.y}`;
-      } else if (mode === "up" || mode === "vertical") {
-        const my = (a.y + b.y) / 2;
-        d = `M${a.x},${a.y} C${a.x},${my} ${b.x},${my} ${b.x},${b.y}`;
-      }
+      const d = edgePath(a, b, mode, this.plugin.settings.lines, !star);
       line.setAttribute("d", d);
       line.setAttribute("class", "st-edge");
       g.appendChild(line);
@@ -840,13 +853,15 @@ class SkillTreeView extends ItemView {
     };
     const text = document.createElementNS(NS, "text");
     text.setAttribute("dominant-baseline", "central");
+    const k = this.plugin.settings.textSize || 1;
+    const place = (x, y) => text.setAttribute("transform", `translate(${x},${y}) scale(${k})`);
     if (star) {
       r *= this.plugin.settings.starSize || 1;
       el("circle", { r, class: "st-under" });
       el("circle", { r, class: "st-body" });
       text.setAttribute("class", "st-label");
-      if (labelRight) { text.setAttribute("text-anchor", "start"); text.setAttribute("x", r + 8); }
-      else { text.setAttribute("text-anchor", "middle"); text.setAttribute("y", r + 12); }
+      if (labelRight) { text.setAttribute("text-anchor", "start"); place(r + 8, 0); }
+      else { text.setAttribute("text-anchor", "middle"); place(0, r + 12 * k); }
       text.textContent = n.name;
     } else {
       ng.addClass("st-boxed");
@@ -854,7 +869,9 @@ class SkillTreeView extends ItemView {
       el("rect", { ...box, class: "st-under" });
       el("rect", { ...box, class: "st-body" });
       text.setAttribute("text-anchor", "middle");
-      text.textContent = n.name.length > 22 ? n.name.slice(0, 21) + "…" : n.name;
+      place(0, 0);
+      const max = Math.max(6, Math.round(22 / k));
+      text.textContent = n.name.length > max ? n.name.slice(0, max - 1) + "…" : n.name;
     }
     ng.appendChild(text);
   }
@@ -1076,6 +1093,7 @@ class SkillTreeSettingTab extends PluginSettingTab {
           this.plugin.settings.mapFile = v.endsWith(".md") ? v : v + ".md";
           apply();
         }));
+    new Setting(containerEl).setName(t("setLook")).setHeading();
     new Setting(containerEl).setName(t("setStyle")).setDesc(t("setStyleDesc"))
       .addDropdown(d => d.addOptions({ classic: t("styleClassic"), sky: t("styleSky"), soft: t("styleSoft") })
         .setValue(this.plugin.settings.style || "classic")
@@ -1087,5 +1105,18 @@ class SkillTreeSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName(t("setStarSize")).setDesc(t("setStarSizeDesc"))
       .addSlider(sl => sl.setLimits(0.6, 1.8, 0.1).setValue(this.plugin.settings.starSize || 1).setDynamicTooltip()
         .onChange(async v => { this.plugin.settings.starSize = v; await this.plugin.save(); this.plugin.refreshViews(); }));
+    new Setting(containerEl).setName(t("setLines")).setDesc(t("setLinesDesc"))
+      .addDropdown(d => d.addOptions({ straight: t("linesStraight"), curved: t("linesCurved"), angled: t("linesAngled") })
+        .setValue(this.plugin.settings.lines || "curved")
+        .onChange(async v => { this.plugin.settings.lines = v; await this.plugin.save(); this.plugin.refreshViews(); }));
+    new Setting(containerEl).setName(t("setLineWidth"))
+      .addSlider(sl => sl.setLimits(0.5, 3, 0.25).setValue(this.plugin.settings.lineWidth || 1).setDynamicTooltip()
+        .onChange(async v => { this.plugin.settings.lineWidth = v; await this.plugin.save(); this.plugin.refreshViews(); }));
+    new Setting(containerEl).setName(t("setTextSize")).setDesc(t("setTextSizeDesc"))
+      .addSlider(sl => sl.setLimits(0.7, 1.6, 0.1).setValue(this.plugin.settings.textSize || 1).setDynamicTooltip()
+        .onChange(async v => { this.plugin.settings.textSize = v; await this.plugin.save(); this.plugin.refreshViews(); }));
+    new Setting(containerEl).setName(t("setGlow")).setDesc(t("setGlowDesc"))
+      .addToggle(tg => tg.setValue(this.plugin.settings.glow !== false)
+        .onChange(async v => { this.plugin.settings.glow = v; await this.plugin.save(); this.plugin.refreshViews(); }));
   }
 }

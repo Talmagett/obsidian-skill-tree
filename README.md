@@ -117,6 +117,7 @@ Top-level checkboxes are legendary skills. Requirements are looked up across all
 - **Map file** — the map note inside that folder (default `Map.md`).
 - **Look** — Classic, Night sky or Soft.
 - **Nodes** — stars with a label, or boxes with the text inside.
+- **Star size**, **Lines** (straight, curved or right angles), **Line thickness**, **Text size** and **Glow** — the same in every layout and on the map.
 
 ## Installation
 
