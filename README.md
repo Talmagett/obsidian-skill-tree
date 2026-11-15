@@ -4,6 +4,14 @@ See yourself as an RPG character. Skill Tree turns plain checklists in your note
 
 There is no XP, no levels and no scores. Real progress is not a number; the tree only shows *where you are* and *what is next*.
 
+![Main map with all branches, constellations and legendary skills](images/map.png)
+
+| A branch tree | Hover shows what a skill requires |
+| --- | --- |
+| ![Code branch as an upward tree](images/tree.png) | ![Tooltip with requirements highlighted](images/hover.png) |
+
+![Body branch in star layout](images/star.png)
+
 ## Features
 
 - **Main map**: every branch, its constellations and cross-branch *legendary* skills on one screen. Brighter constellations = more skills known.
