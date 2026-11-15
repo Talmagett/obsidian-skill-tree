@@ -71,15 +71,8 @@
 
 /* ---------- look: night sky ---------- */
 .st-style-sky .st-canvas { --st-sky: #0b0e1d; background: radial-gradient(ellipse at 50% 35%, #1a2045 0%, #0e1226 55%, #07080f 100%); }
-.st-style-sky .st-canvas::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .9;
-  background-image:
-    radial-gradient(1px 1px at 23px 31px, rgba(255, 255, 255, .55), transparent),
-    radial-gradient(1px 1px at 131px 77px, rgba(255, 255, 255, .35), transparent),
-    radial-gradient(1.5px 1.5px at 207px 153px, rgba(255, 255, 255, .5), transparent),
-    radial-gradient(1px 1px at 61px 189px, rgba(255, 255, 255, .3), transparent),
-    radial-gradient(1px 1px at 173px 19px, rgba(255, 255, 255, .25), transparent),
-    radial-gradient(1px 1px at 97px 121px, rgba(190, 200, 255, .35), transparent);
-  background-size: 241px 223px; }
+.st-style-sky .st-canvas::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image: var(--st-stars); background-size: cover; background-position: center; }
 .st-style-sky .st-svg { --color-green: #9ad8ff; --color-green-rgb: 154, 216, 255; --color-yellow: #ffe08a; --color-yellow-rgb: 255, 224, 138;
   --color-orange: #ffc861; --color-orange-rgb: 255, 200, 97; --color-purple: #b9a4ff; }
 .st-style-sky .st-node .st-under { fill: var(--st-sky); }
@@ -98,20 +91,89 @@
 .st-style-sky .st-branch .st-body, .st-style-sky .st-kind-virtual .st-body { fill: rgba(150, 130, 255, .2); stroke: rgba(180, 160, 255, .75); }
 .st-style-sky .st-available .st-body { stroke: #c9b8ff; filter: drop-shadow(0 0 6px #a68bff); }
 
-/* ---------- look: soft ---------- */
-.st-style-soft .st-canvas { background-image: radial-gradient(var(--background-modifier-border) 1px, transparent 1px); background-size: 22px 22px; }
-.st-style-soft .st-edge { stroke: var(--background-modifier-border); stroke-width: calc(3.5px * var(--st-line, 1)); stroke-linecap: round; stroke-linejoin: round; }
-.st-style-soft .st-edge-known, .st-style-soft .st-edge-mastered { stroke: rgba(var(--color-green-rgb), .45); }
-.st-style-soft .st-edge-learning { stroke: rgba(var(--color-yellow-rgb), .45); }
-.st-style-soft .st-node .st-body { stroke-width: 3; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .25)); }
-.st-style-soft .st-known .st-body { fill: var(--color-green); stroke: rgba(var(--color-green-rgb), .45); }
-.st-style-soft .st-mastered .st-body { fill: var(--color-orange); stroke: rgba(var(--color-orange-rgb), .45); }
-.st-style-soft .st-learning .st-body { fill: rgba(var(--color-yellow-rgb), .3); stroke: var(--color-yellow); }
-.st-style-soft .st-locked { opacity: 1; }
-.st-style-soft .st-locked .st-body { fill: var(--background-secondary); stroke: var(--background-modifier-border); filter: none; }
-.st-style-soft .st-locked text { fill: var(--text-faint); }
-.st-style-soft .st-node .st-label { font-weight: 500; }
-.st-style-soft .st-branch .st-body, .st-style-soft .st-kind-virtual .st-body { fill: var(--interactive-accent); stroke: rgba(var(--color-accent-rgb, 124, 58, 237), .35); }
+/* ---------- look: old map (parchment and ink) ---------- */
+.st-style-parchment .st-canvas { --st-paper: #eedfbb; --st-ink: #3b2a1a;
+  background: radial-gradient(ellipse at 50% 45%, #f4e7c6 0%, #e9d6aa 60%, #d6bd88 100%); }
+.st-style-parchment .st-canvas::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 140px rgba(92, 58, 20, .45); }
+.st-style-parchment .st-svg { --color-green: #4e7a3a; --color-green-rgb: 78, 122, 58; --color-yellow: #b07d1a; --color-yellow-rgb: 176, 125, 26;
+  --color-orange: #a0461e; --color-orange-rgb: 160, 70, 30; --color-purple: #6b4a8a; --color-red: #a3201a;
+  --interactive-accent: #7a3b2e; --color-accent-rgb: 122, 59, 46; --text-on-accent: #f4e7c6; }
+.st-style-parchment .st-svg text { font-family: Georgia, "Palatino Linotype", "Book Antiqua", serif; fill: var(--st-ink); }
+.st-style-parchment .st-node .st-under { fill: var(--st-paper); }
+.st-style-parchment .st-node .st-label { stroke: var(--st-paper); font-style: italic; font-size: 13px; }
+.st-style-parchment .st-edge { stroke: rgba(59, 42, 26, .4); stroke-width: calc(1.6px * var(--st-line, 1)); stroke-linecap: round; }
+.st-style-parchment .st-edge-known, .st-style-parchment .st-edge-mastered { stroke: rgba(78, 122, 58, .85); }
+.st-style-parchment .st-edge-learning { stroke: rgba(176, 125, 26, .8); }
+.st-style-parchment .st-node .st-body { fill: rgba(59, 42, 26, .06); stroke: rgba(59, 42, 26, .55); stroke-width: 1.8; }
+.st-style-parchment .st-known .st-body { fill: #5d8a46; stroke: #2f4f22; }
+.st-style-parchment .st-mastered .st-body { fill: #c99a2e; stroke: #7a5a08; }
+.st-style-parchment .st-learning .st-body { fill: rgba(176, 125, 26, .25); stroke: #b07d1a; }
+.st-style-parchment .st-want .st-body { fill: transparent; stroke: #6b4a8a; }
+.st-style-parchment .st-locked { opacity: .55; }
+.st-style-parchment .st-branch .st-body, .st-style-parchment .st-kind-virtual .st-body { fill: #8a3f30; stroke: #4a2219; }
+.st-style-parchment .st-available .st-body { stroke: #7a3b2e; stroke-width: 2.5; filter: drop-shadow(0 0 4px rgba(122, 59, 46, .6)); }
+.st-style-parchment .st-boxed:is(.st-known, .st-mastered, .st-branch, .st-kind-virtual) text { fill: #f6ead0; font-weight: 600; }
+.st-style-parchment .st-boxed:is(.st-p-6, .st-p-7, .st-p-8, .st-p-9, .st-p-10) text { fill: #f6ead0; }
+.st-style-parchment .st-node.st-map-con text { fill: var(--st-ink); }
+
+/* ---------- look: blueprint ---------- */
+.st-style-blueprint .st-canvas { --st-bp: #133a63;
+  background-color: var(--st-bp);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .09) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .035) 1px, transparent 1px);
+  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px; }
+.st-style-blueprint .st-svg { --color-green: #ffffff; --color-green-rgb: 255, 255, 255; --color-yellow: #ffd166; --color-yellow-rgb: 255, 209, 102;
+  --color-orange: #ffb38a; --color-orange-rgb: 255, 179, 138; --color-purple: #c3b5ff; --color-red: #ff6b6b;
+  --interactive-accent: #7fd3ff; --color-accent-rgb: 127, 211, 255; --text-on-accent: #133a63; }
+.st-style-blueprint .st-svg text { font-family: var(--font-monospace); fill: #e8f1ff; letter-spacing: .02em; }
+.st-style-blueprint .st-node .st-under { fill: var(--st-bp); }
+.st-style-blueprint .st-node .st-label { stroke: var(--st-bp); font-size: 11px; }
+.st-style-blueprint .st-edge { stroke: rgba(220, 235, 255, .4); stroke-width: calc(1.3px * var(--st-line, 1)); }
+.st-style-blueprint .st-edge-known, .st-style-blueprint .st-edge-mastered { stroke: rgba(255, 255, 255, .9); }
+.st-style-blueprint .st-edge-learning { stroke: rgba(255, 209, 102, .8); stroke-dasharray: 6 4; }
+.st-style-blueprint .st-node .st-body { fill: rgba(255, 255, 255, .03); stroke: rgba(220, 235, 255, .55); stroke-width: 1.5; }
+.st-style-blueprint .st-known .st-body { fill: rgba(255, 255, 255, .2); stroke: #ffffff; }
+.st-style-blueprint .st-mastered .st-body { fill: #ffffff; stroke: #ffffff; }
+.st-style-blueprint .st-learning .st-body { fill: rgba(255, 209, 102, .15); stroke: #ffd166; }
+.st-style-blueprint .st-locked { opacity: .5; }
+.st-style-blueprint .st-branch .st-body, .st-style-blueprint .st-kind-virtual .st-body { fill: rgba(127, 211, 255, .18); stroke: #7fd3ff; }
+.st-style-blueprint .st-available .st-body { stroke: #7fd3ff; filter: none; stroke-dasharray: 3 3; }
+.st-style-blueprint .st-boxed.st-mastered text { fill: var(--st-bp); font-weight: 700; }
+.st-style-blueprint .st-boxed:is(.st-p-6, .st-p-7, .st-p-8, .st-p-9, .st-p-10) text { fill: var(--st-bp); }
+.st-style-blueprint .st-node.st-map-center .st-body { fill: #7fd3ff; }
+.st-style-blueprint .st-node.st-map-con text { fill: #c9dcf5; }
+
+/* ---------- look: neon ---------- */
+.st-style-neon .st-canvas { --st-dark: #08060f;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(255, 0, 170, .13), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(0, 229, 255, .12), transparent 45%),
+    var(--st-dark); }
+.st-style-neon .st-svg { --color-green: #00f5d4; --color-green-rgb: 0, 245, 212; --color-yellow: #fee440; --color-yellow-rgb: 254, 228, 64;
+  --color-orange: #ff9e00; --color-orange-rgb: 255, 158, 0; --color-purple: #f15bb5; --color-red: #ff3864;
+  --interactive-accent: #9b5de5; --color-accent-rgb: 155, 93, 229; --text-on-accent: #ffffff; }
+.st-style-neon .st-svg text { fill: #ece8ff; }
+.st-style-neon .st-node .st-under { fill: var(--st-dark); }
+.st-style-neon .st-node .st-label { stroke: var(--st-dark); }
+.st-style-neon .st-edge { stroke: rgba(155, 93, 229, .35); stroke-width: calc(1.6px * var(--st-line, 1)); }
+.st-style-neon .st-edge-known, .st-style-neon .st-edge-mastered { stroke: #00f5d4; filter: drop-shadow(0 0 3px #00f5d4); }
+.st-style-neon .st-edge-learning { stroke: rgba(254, 228, 64, .8); filter: drop-shadow(0 0 3px #fee440); }
+.st-style-neon .st-node .st-body { fill: rgba(155, 93, 229, .08); stroke: rgba(155, 93, 229, .55); }
+.st-style-neon .st-known .st-body { fill: rgba(0, 245, 212, .14); stroke: #00f5d4; filter: drop-shadow(0 0 4px #00f5d4) drop-shadow(0 0 10px rgba(0, 245, 212, .5)); }
+.st-style-neon .st-mastered .st-body { fill: rgba(255, 158, 0, .16); stroke: #ff9e00; filter: drop-shadow(0 0 4px #ff9e00) drop-shadow(0 0 12px rgba(255, 158, 0, .55)); }
+.st-style-neon .st-learning .st-body { fill: rgba(254, 228, 64, .1); stroke: #fee440; filter: drop-shadow(0 0 4px #fee440); }
+.st-style-neon .st-want .st-body { stroke: #f15bb5; }
+.st-style-neon .st-locked { opacity: .45; }
+.st-style-neon .st-branch .st-body, .st-style-neon .st-kind-virtual .st-body { fill: rgba(155, 93, 229, .2); stroke: #b98cff; filter: drop-shadow(0 0 5px #9b5de5); }
+.st-style-neon .st-available .st-body { stroke: #f15bb5; filter: drop-shadow(0 0 5px #f15bb5) drop-shadow(0 0 12px rgba(241, 91, 181, .5)); }
+.st-style-neon .st-node.st-map-center .st-body { fill: #9b5de5; filter: drop-shadow(0 0 10px #9b5de5); }
+.st-style-neon .st-node.st-map-legendary .st-body { filter: drop-shadow(0 0 5px #ff9e00); }
+.st-style-neon .st-node.st-map-con text { fill: #bdb6e0; }
+.st-style-neon .st-boxed:is(.st-p-6, .st-p-7, .st-p-8, .st-p-9, .st-p-10) text { fill: var(--st-dark); }
 
 /* ---------- main map ---------- */
 .st-node.st-map-center .st-body { fill: var(--interactive-accent); stroke: var(--interactive-accent); }
@@ -143,8 +205,6 @@
 .st-style-sky .st-boxed:is(.st-known, .st-mastered) text { fill: var(--st-sky); font-weight: 600; }
 .st-style-sky .st-boxed:is(.st-p-6, .st-p-7, .st-p-8, .st-p-9, .st-p-10) text { fill: var(--st-sky); }
 .st-style-sky .st-boxed.st-learning .st-body { fill: rgba(255, 224, 138, .16); }
-.st-style-soft .st-boxed:is(.st-known, .st-mastered) text { fill: var(--background-primary); font-weight: 600; }
-.st-style-soft .st-boxed:is(.st-branch, .st-kind-virtual) text { fill: var(--text-on-accent); }
 
 /* ---------- hover: dim everything except the node and its requirements ---------- */
 .st-svg.st-hovering .st-node:not(.st-hover):not(.st-req) { opacity: .2; }

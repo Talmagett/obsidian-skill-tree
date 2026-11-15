@@ -10,14 +10,14 @@ There is no XP, no levels and no scores. Real progress is not a number; the tree
 | --- | --- |
 | ![Code branch as an upward tree](images/tree.png) | ![Pinned card with requirements highlighted](images/hover.png) |
 
-![Whole Code branch left to right, with boxes instead of stars, Soft look](images/box.png)
+![Whole Code branch left to right, with boxes instead of stars, Old map look](images/box.png)
 
 ## Features
 
 - **Main map**: every branch, its constellations and cross-branch *legendary* skills on one screen. Brighter constellations = more skills known.
 - **Branch trees**: one tree per branch, either all at once or one constellation at a time.
 - **Four layouts** shared by the map and the trees: ▲ up (Skyrim-like), ☀ star, ↓ top-down, → left-right.
-- **Three looks**: Classic, Night sky and Soft. **Two node shapes**: stars with a label or boxes with the text inside. Every combination works in every layout.
+- **Five looks**: Classic, Night sky, Old map, Blueprint and Neon. **Two node shapes**: stars with a label or boxes with the text inside. Every combination works in every layout.
 - **Prerequisites without spaghetti**: a skill needs *all* (`A & B`) or *any* (`A | B`) of other skills. Hover a skill to highlight what it requires.
 - **Skill card**: hover shows status, description, progress and requirements; click pins the card, with a button to open the note.
 - **Available skills glow** when their requirements are met.
@@ -115,7 +115,7 @@ Top-level checkboxes are legendary skills. Requirements are looked up across all
 
 - **Skills folder** — where branches live (default `Skills`).
 - **Map file** — the map note inside that folder (default `Map.md`).
-- **Look** — Classic, Night sky or Soft.
+- **Look** — Classic, Night sky, Old map, Blueprint or Neon.
 - **Nodes** — stars with a label, or boxes with the text inside.
 - **Star size**, **Lines** (straight, curved or right angles), **Line thickness**, **Text size** and **Glow** — the same in every layout and on the map.
 

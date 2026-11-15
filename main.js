@@ -20,7 +20,7 @@ const STRINGS = {
     mastered: "⭐ mastered", known: "✅ known", learning: "🔥 learning", want: "✨ want", locked: "🔒 locked", branch: "branch",
     available: "🔓 available", wantAvailable: "✨ want · available",
     map: "🗺 Map", mapTab: "Map", view: "View", close: "Close", openNote: "Open note", pinHint: "Click to pin · Ctrl+click opens the note",
-    setStyle: "Look", setStyleDesc: "How the skill tree is drawn.", styleClassic: "Classic", styleSky: "Night sky", styleSoft: "Soft",
+    setStyle: "Look", setStyleDesc: "How the skill tree is drawn.", styleClassic: "Classic", styleSky: "Night sky", styleParchment: "Old map", styleBlueprint: "Blueprint", styleNeon: "Neon",
     setNodes: "Nodes", setNodesDesc: "Same in every layout and on the map.", nodesStar: "Stars with a label", nodesBox: "Boxes with text inside", setStarSize: "Star size", setStarSizeDesc: "For star nodes: how big the stars are.", setLook: "Appearance", setLines: "Lines", setLinesDesc: "Same in the trees and on the map.", linesStraight: "Straight", linesCurved: "Curved", linesAngled: "Right angles", setLineWidth: "Line thickness", setTextSize: "Text size", setTextSizeDesc: "Labels under stars and text inside boxes.", setGlow: "Glow", setGlowDesc: "Glow and shadows around nodes.", up: "▲ up", radial: "◎ star", vertical: "↓ top-down", horizontal: "→ left-right",
     all: "All", grouped: "By group", fit: "⤢ fit",
     noFolder: (f) => `No branch folders in “${f}” yet.`, noNodes: "No notes with type: branch in this folder.",
@@ -36,7 +36,7 @@ const STRINGS = {
     mastered: "⭐ мастер", known: "✅ умею", learning: "🔥 качаю", want: "✨ хочу", locked: "🔒 закрыт", branch: "ветка",
     available: "🔓 доступно", wantAvailable: "✨ хочу · доступно",
     map: "🗺 Карта", mapTab: "Карта", view: "Вид", close: "Закрыть", openNote: "Открыть заметку", pinHint: "Клик — закрепить · Ctrl+клик — открыть заметку",
-    setStyle: "Оформление", setStyleDesc: "Как рисуется дерево навыков.", styleClassic: "Классика", styleSky: "Ночное небо", styleSoft: "Мягкое",
+    setStyle: "Оформление", setStyleDesc: "Как рисуется дерево навыков.", styleClassic: "Классика", styleSky: "Ночное небо", styleParchment: "Старая карта", styleBlueprint: "Чертёж", styleNeon: "Неон",
     setNodes: "Узлы", setNodesDesc: "Одинаково во всех видах и на карте.", nodesStar: "Звёзды с подписью", nodesBox: "Блоки с текстом внутри", setStarSize: "Размер звёзд", setStarSizeDesc: "Для узлов-звёзд: насколько они крупные.", setLook: "Внешний вид", setLines: "Линии", setLinesDesc: "Одинаково в деревьях и на карте.", linesStraight: "Прямые", linesCurved: "Плавные", linesAngled: "Под прямым углом", setLineWidth: "Толщина линий", setTextSize: "Размер текста", setTextSizeDesc: "Подписи под звёздами и текст в блоках.", setGlow: "Свечение", setGlowDesc: "Свечение и тени вокруг узлов.", up: "▲ вверх", radial: "◎ звезда", vertical: "↓ сверху", horizontal: "→ слева",
     all: "Все", grouped: "По группам", fit: "⤢ вписать",
     noFolder: (f) => `В «${f}» пока нет папок-веток.`, noNodes: "В этой папке нет заметок с type: branch.",
@@ -497,6 +497,30 @@ function layout(nodes, rootName, mode = "radial", box = false) {
   return { all, pos, edges };
 }
 
+/* ---------- night sky stars ---------- */
+
+// a fixed random starfield (same every time), big enough that it never tiles
+let STARS = null;
+function starfield() {
+  if (STARS) return STARS;
+  let seed = 20261116;
+  const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const W = 2400, H = 1500, tints = ["255,255,255", "255,255,255", "200,215,255", "255,236,210"];
+  let dots = "";
+  for (let i = 0; i < 700; i++) {
+    const big = rnd() < 0.06;
+    const r = big ? 1.2 + rnd() * 0.9 : 0.35 + rnd() * 0.7;
+    const a = big ? 0.75 + rnd() * 0.25 : 0.15 + rnd() * 0.5;
+    const c = tints[Math.floor(rnd() * tints.length)];
+    const x = (rnd() * W).toFixed(1), y = (rnd() * H).toFixed(1);
+    if (big) dots += `<circle cx='${x}' cy='${y}' r='${(r * 3).toFixed(2)}' fill='rgba(${c},${(a * 0.12).toFixed(2)})'/>`;
+    dots += `<circle cx='${x}' cy='${y}' r='${r.toFixed(2)}' fill='rgba(${c},${a.toFixed(2)})'/>`;
+  }
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${W} ${H}' preserveAspectRatio='xMidYMid slice'>${dots}</svg>`;
+  STARS = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  return STARS;
+}
+
 /* ---------- edges ---------- */
 
 // one path for every edge: straight, curved or right-angled, the same in trees and on the map
@@ -579,7 +603,7 @@ class SkillTreeView extends ItemView {
     this.contentEl.removeClass(...[...this.contentEl.classList].filter(c => c.startsWith("st-style-") || c.startsWith("st-bar-")));
     this.contentEl.addClass(`st-style-${s.style || "classic"}`, `st-bar-${s.bar || "tabs"}`);
     this.contentEl.toggleClass("st-no-glow", s.glow === false);
-    setVars(this.contentEl, { "--st-line": String(s.lineWidth || 1) });
+    setVars(this.contentEl, { "--st-line": String(s.lineWidth || 1), "--st-stars": s.style === "sky" ? starfield() : "none" });
   }
 
   renderEmpty() {
@@ -1028,6 +1052,7 @@ module.exports = class SkillTreePlugin extends Plugin {
     const data = Object.assign({}, await this.loadData());
     if (data.settings || data.state) {
       this.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings);
+      if (this.settings.style === "soft") this.settings.style = "classic";
       this.state = Object.assign({}, data.state);
     } else {
       // data from the first test build: plain view state, skills under Personal/Skills
@@ -1095,7 +1120,7 @@ class SkillTreeSettingTab extends PluginSettingTab {
         }));
     new Setting(containerEl).setName(t("setLook")).setHeading();
     new Setting(containerEl).setName(t("setStyle")).setDesc(t("setStyleDesc"))
-      .addDropdown(d => d.addOptions({ classic: t("styleClassic"), sky: t("styleSky"), soft: t("styleSoft") })
+      .addDropdown(d => d.addOptions({ classic: t("styleClassic"), sky: t("styleSky"), parchment: t("styleParchment"), blueprint: t("styleBlueprint"), neon: t("styleNeon") })
         .setValue(this.plugin.settings.style || "classic")
         .onChange(async v => { this.plugin.settings.style = v; await this.plugin.save(); this.plugin.refreshViews(); }));
     new Setting(containerEl).setName(t("setNodes")).setDesc(t("setNodesDesc"))
