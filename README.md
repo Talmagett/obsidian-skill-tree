@@ -4,22 +4,24 @@ See yourself as an RPG character. Skill Tree turns plain checklists in your note
 
 There is no XP, no levels and no scores. Real progress is not a number; the tree only shows *where you are* and *what is next*.
 
-![Main map with all branches, constellations and legendary skills](images/map.png)
+![Main map in the Night sky look](images/map.png)
 
-| A branch tree | Hover shows what a skill requires |
+| A branch tree | Click a skill to pin its card |
 | --- | --- |
-| ![Code branch as an upward tree](images/tree.png) | ![Tooltip with requirements highlighted](images/hover.png) |
+| ![Code branch as an upward tree](images/tree.png) | ![Pinned card with requirements highlighted](images/hover.png) |
 
-![Body branch in star layout](images/star.png)
+![Whole Code branch left to right, with boxes instead of stars, Soft look](images/box.png)
 
 ## Features
 
 - **Main map**: every branch, its constellations and cross-branch *legendary* skills on one screen. Brighter constellations = more skills known.
 - **Branch trees**: one tree per branch, either all at once or one constellation at a time.
-- **Four layouts** shared by the map and the trees: ▲ up (Skyrim-like), ◎ star, ↓ top-down, → left-right.
+- **Four layouts** shared by the map and the trees: ▲ up (Skyrim-like), ☀ star, ↓ top-down, → left-right.
+- **Three looks**: Classic, Night sky and Soft. **Two node shapes**: stars with a label or boxes with the text inside. Every combination works in every layout.
 - **Prerequisites without spaghetti**: a skill needs *all* (`A & B`) or *any* (`A | B`) of other skills. Hover a skill to highlight what it requires.
+- **Skill card**: hover shows status, description, progress and requirements; click pins the card, with a button to open the note.
 - **Available skills glow** when their requirements are met.
-- Click any node to open the note at that line. Pan by dragging, zoom with the wheel.
+- Ctrl/Cmd+click opens the note at that line. Pan by dragging, zoom with the wheel.
 - Remembers the last opened tree, layout and constellation.
 - English and Russian interface (follows Obsidian's language).
 
@@ -113,10 +115,12 @@ Top-level checkboxes are legendary skills. Requirements are looked up across all
 
 - **Skills folder** — where branches live (default `Skills`).
 - **Map file** — the map note inside that folder (default `Map.md`).
+- **Look** — Classic, Night sky or Soft.
+- **Nodes** — stars with a label, or boxes with the text inside.
 
 ## Installation
 
-Until the plugin is in the community list, install it with [BRAT](https://github.com/TfTHacker/obsidian42-brat) or manually: download `main.js`, `manifest.json` and `styles.css` from the latest release into `<vault>/.obsidian/plugins/skill-tree/`, then enable it in **Settings → Community plugins**.
+Install it from [community.obsidian.md](https://community.obsidian.md/plugins/skill-tree) or search for **Skill Tree** in **Settings → Community plugins → Browse**. Manual install: download `main.js`, `manifest.json` and `styles.css` from the latest release into `<vault>/.obsidian/plugins/skill-tree/`, then enable it in **Settings → Community plugins**.
 
 ## License
 
