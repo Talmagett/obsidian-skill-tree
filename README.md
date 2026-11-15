@@ -8,7 +8,7 @@ There is no XP, no levels and no scores. Real progress is not a number; the tree
 
 | A branch tree | Click a skill to pin its card |
 | --- | --- |
-| ![Code branch as an upward tree](images/tree.png) | ![Pinned card with requirements highlighted](images/hover.png) |
+| ![Code branch as an upward tree](images/tree.png) | ![Pinned card with the learned date, sources and status buttons](images/hover.png) |
 
 ![Whole Code branch left to right, with boxes instead of stars, Old map look](images/box.png)
 
@@ -72,6 +72,8 @@ parent: "[[Skills/Programming/Programming|Programming]]"
 ---
 
 - [x] SQL — I design schemas and write queries
+	- source:: [[SQL Performance Explained]], https://use-the-index-luke.com
+	- learned:: 2024-03-01
 - [x] PHP
 - [/] Laravel
 	- requires:: PHP
