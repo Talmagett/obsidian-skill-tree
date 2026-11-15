@@ -24,8 +24,12 @@ There is no XP, no levels and no scores. Real progress is not a number; the tree
 - **What's next**: a panel with everything you are learning and everything that is unlocked, across all branches.
 - **Find a skill**: type a name and the view flies to it. Both are also commands you can bind to hotkeys.
 - **Constellation tabs** show how many skills of each constellation you know.
+- **Sources and dates**: list the books and courses behind a skill and when you learned it; both show in the card. Marking a skill known from the card records today’s date.
+- **Right-click a skill** to add a new skill under it, change its status or open the note — no need to leave the tree.
+- **Save as PNG**: the current map or tree as a picture, in the look you use.
+- **Clean zoom**: small skill labels hide when you zoom far out and come back as you zoom in; switching trees fades in smoothly.
 - **Available skills glow** when their requirements are met.
-- Ctrl/Cmd+click opens the note at that line. Pan by dragging, zoom with the wheel.
+- Ctrl/Cmd+click opens the note at that line. Pan by dragging, zoom with the wheel; on phones and tablets drag with one finger and pinch to zoom.
 - Remembers the last opened tree, layout and constellation.
 - English and Russian interface (follows Obsidian's language).
 
@@ -87,6 +91,7 @@ parent: "[[Skills/Programming/Programming|Programming]]"
 - A skill hangs under its first requirement from the same constellation; requirements from other places are only highlighted on hover.
 - `## Headings` inside a constellation make sub-groups.
 - `Name — description` on the checkbox line is a shortcut for a description.
+- `source:: [[Book]], [[Course]], https://…` lists where you learn it (`источник::` works too); `learned:: 2026-03-01` is when you learned it (`изучено::`). Skill notes can use `source` / `learned` in their frontmatter.
 
 ### Statuses
 
@@ -122,6 +127,7 @@ Top-level checkboxes are legendary skills. Requirements are looked up across all
 - **Look** — Classic, Night sky, Old map, Blueprint or Neon.
 - **Nodes** — stars with a label, or boxes with the text inside.
 - **Star size**, **Lines** (straight, curved or right angles), **Line thickness**, **Text size** and **Glow** — the same in every layout and on the map.
+- **Hide labels when zoomed out** and **Record the learned date** — both on by default.
 
 ## Installation
 

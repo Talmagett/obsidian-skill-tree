@@ -1,9 +1,9 @@
 /* Skill Tree — an RPG-style skill tree built from your notes (plain JS, no bundler) */
-const { Plugin, ItemView, FuzzySuggestModal, PluginSettingTab, Setting, Notice, TFile, TFolder, debounce, normalizePath, moment, setIcon } = require("obsidian");
+const { Plugin, ItemView, FuzzySuggestModal, Modal, Menu, PluginSettingTab, Setting, Notice, TFile, TFolder, debounce, normalizePath, moment, setIcon } = require("obsidian");
 
 const VIEW_TYPE = "skill-tree-view";
 const MAP = "__map__";
-const DEFAULT_SETTINGS = { folder: "Skills", mapFile: "Map.md", style: "classic", nodes: "star", starSize: 1, lines: "curved", lineWidth: 1, textSize: 1, glow: true, bar: "tabs" };
+const DEFAULT_SETTINGS = { folder: "Skills", mapFile: "Map.md", style: "classic", nodes: "star", starSize: 1, lines: "curved", lineWidth: 1, textSize: 1, glow: true, hideFar: true, stampLearned: true, bar: "tabs" };
 
 const NODE_W = 170;
 const NODE_H = 44;
@@ -12,6 +12,35 @@ const LEVEL_H = 110;
 
 const TASK_STATUS = { "x": "known", "X": "known", "/": "learning", ">": "want", " ": "locked", "*": "mastered" };
 const REQ_RE = /^(требует|requires)::\s*(.+)$/i;
+const SRC_RE = /^(источники?|sources?)::\s*(.+)$/i;
+const DATE_RE = /^(изучено|learned)::\s*(.+)$/i;
+
+// "[[Book]], [[Course|alias]], https://…, plain text" -> [{ text, link? , url? }]
+function parseSources(v) {
+  const list = Array.isArray(v) ? v : v == null ? [] : String(v).match(/\[\[[^\]]+\]\]|\[[^\]]*\]\([^)]*\)|[^,;]+/g) || [];
+  return list.map(x => String(x).trim()).filter(Boolean).map(x => {
+    const wl = x.match(/^\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]$/);
+    if (wl) return { text: (wl[2] || wl[1]).trim(), link: wl[1].trim() };
+    const md = x.match(/^\[([^\]]*)\]\(([^)]*)\)$/);
+    if (md) return /^https?:/i.test(md[2]) ? { text: md[1] || md[2], url: md[2] } : { text: md[1] || md[2], link: decodeURI(md[2]) };
+    if (/^https?:\/\//i.test(x)) return { text: x.replace(/^https?:\/\/(www\.)?/i, ""), url: x };
+    return { text: x };
+  });
+}
+
+// sub-bullet "source:: …" / "learned:: …"; true when the line was one of them
+function readField(n, text) {
+  const src = text.match(SRC_RE);
+  if (src) { (n.sources = n.sources || []).push(...parseSources(src[2])); return true; }
+  const date = text.match(DATE_RE);
+  if (date) { n.learned = date[2].trim(); return true; }
+  return false;
+}
+
+function fmtDate(v) {
+  const m = moment(String(v), ["YYYY-MM-DD", "YYYY-MM-DDTHH:mm", "DD.MM.YYYY"], true);
+  return m.isValid() ? `${m.format("LL")} · ${m.fromNow()}` : String(v);
+}
 
 /* ---------- i18n ---------- */
 
@@ -31,6 +60,10 @@ const STRINGS = {
     cmdOpen: "Open", cmdExample: "Create example tree", cmdFind: "Find a skill", cmdNext: "What's next",
     find: "Find a skill", findPlaceholder: "Skill name…", next: "What's next", nextLearning: "Learning now", nextAvailable: "Ready to start",
     nextEmpty: "Nothing here yet: mark a skill as known and the next ones unlock.", setStatusFail: "Could not find the checkbox on that line.",
+    sources: "Sources", learnedOn: "Learned", exportPng: "Save as PNG", cmdExport: "Save the current view as PNG", exported: (p) => `Saved: ${p}`, exportFail: "Could not save the picture.",
+    addSkill: "Add a skill here", addSkillTitle: (p) => `New skill in “${p}”`, skillName: "Name", skillNameDesc: "You can add a description after “ — ”.", add: "Add",
+    setHideFar: "Hide labels when zoomed out", setHideFarDesc: "Skill labels come back when you zoom in or hover a star.",
+    setStampLearned: "Record the learned date", setStampLearnedDesc: "When you mark a skill as known from the card, “learned:: date” is added under it.",
     setFolder: "Skills folder", setFolderDesc: "Each subfolder is a branch; each note inside it with type: branch is a constellation.",
     setMap: "Map file", setMapDesc: "Note inside the skills folder with the map center and legendary skills.",
   },
@@ -49,6 +82,10 @@ const STRINGS = {
     cmdOpen: "Открыть", cmdExample: "Создать пример дерева", cmdFind: "Найти навык", cmdNext: "Что дальше",
     find: "Найти навык", findPlaceholder: "Название навыка…", next: "Что дальше", nextLearning: "Качаю сейчас", nextAvailable: "Можно начинать",
     nextEmpty: "Пока пусто: отметь навык изученным, и откроются следующие.", setStatusFail: "Не нашёл чекбокс на этой строке.",
+    sources: "Источники", learnedOn: "Изучено", exportPng: "Сохранить как PNG", cmdExport: "Сохранить текущий вид как PNG", exported: (p) => `Сохранено: ${p}`, exportFail: "Не получилось сохранить картинку.",
+    addSkill: "Добавить навык сюда", addSkillTitle: (p) => `Новый навык в «${p}»`, skillName: "Название", skillNameDesc: "После « — » можно добавить описание.", add: "Добавить",
+    setHideFar: "Прятать подписи при отдалении", setHideFarDesc: "Подписи навыков возвращаются при приближении или наведении на звезду.",
+    setStampLearned: "Записывать дату изучения", setStampLearnedDesc: "Когда отмечаешь навык изученным из карточки, под ним появляется «learned:: дата».",
     setFolder: "Папка навыков", setFolderDesc: "Каждая подпапка — ветка, каждая заметка в ней с type: branch — созвездие.",
     setMap: "Файл карты", setMapDesc: "Заметка в папке навыков с центром карты и легендарными навыками.",
   },
@@ -90,6 +127,8 @@ async function buildGraph(app, folderPath) {
       desc: fm.description || "",
       status: fm.status || (fm.type === "branch" ? "branch" : "locked"),
       kind: fm.type,
+      sources: parseSources(fm.sources ?? fm.source ?? fm["источники"] ?? fm["источник"]),
+      learned: fm.learned ?? fm["изучено"] ?? null,
       file, line: null,
     });
   }
@@ -145,6 +184,7 @@ async function buildGraph(app, folderPath) {
         const owner = nodes.get(parentId);
         const req = text.match(REQ_RE);
         if (req && owner) owner.reqText = req[2];
+        else if (owner && readField(owner, text)) { /* source or date */ }
         else if (text && owner) {
           if (!owner.desc) owner.desc = text;
           else (owner.extra = owner.extra || []).push(text);
@@ -183,7 +223,7 @@ async function buildGraph(app, folderPath) {
     }
   }
 
-  // 4) requirements: "требует:: A & B" (all) or "A | B" (any), by node name
+  // 4) requirements: "requires:: A & B" (all) or "A | B" (any), by node name
   const byName = new Map();
   for (const n of nodes.values()) byName.set(n.name.toLowerCase(), n.id);
   for (const n of nodes.values()) {
@@ -279,6 +319,7 @@ async function buildMap(app, rootFolder, mapPath, branchNames) {
         const text = (lines[line] || "").replace(/^\s*[-*+]\s+/, "").trim();
         const req = text.match(REQ_RE);
         if (req) cur.reqText = req[2];
+        else if (readField(cur, text)) { /* source or date */ }
         else if (!cur.desc) cur.desc = text;
         else cur.extra.push(text);
       }
@@ -392,7 +433,7 @@ function mapLayout(data, mode = "radial", box = false) {
       hl.set(id, (hl.has(id) ? hl.get(id) : true) && r.done);
     }
     nodes.push({
-      id: `map:l:${L.line}`, name: L.name, desc: L.desc, extra: L.extra, kind: "legendary", status: L.status,
+      id: `map:l:${L.line}`, name: L.name, desc: L.desc, extra: L.extra, sources: L.sources, learned: L.learned, kind: "legendary", status: L.status,
       available: L.available, x, y, c0, r: 17, reqList: L.reqList, op: L.op, highlight: [...hl], file: data.mapFile, line: L.line,
     });
   });
@@ -525,6 +566,45 @@ function starfield() {
   return STARS;
 }
 
+/* ---------- writing into notes ---------- */
+
+const indentOf = (l) => l.match(/^\s*/)[0];
+const indentWidth = (l) => indentOf(l).replace(/\t/g, "    ").length;
+const isHeading = (l) => /^#{1,6}\s/.test(l);
+const indentUnit = (lines) => {
+  for (const l of lines) { const m = l.match(/^(\s+)[-*+]\s/); if (m) return m[1][0] === "\t" ? "\t" : m[1]; }
+  return "\t";
+};
+// where the children of a list item go and with which indent
+function childSlot(lines, line) {
+  const w = indentWidth(lines[line] || "");
+  let j = line + 1, ind = null;
+  while (j < lines.length && lines[j].trim() && indentWidth(lines[j]) > w) { if (ind === null) ind = indentOf(lines[j]); j++; }
+  return { at: j, indent: ind !== null ? ind : indentOf(lines[line] || "") + indentUnit(lines) };
+}
+// add "- [ ] name" under an item, a heading section or the branch note itself; returns its line
+function insertSkill(lines, kind, line, name, basename) {
+  const entry = `- [ ] ${name}`;
+  if (kind === "item") {
+    const { at, indent } = childSlot(lines, line);
+    lines.splice(at, 0, indent + entry);
+    return at;
+  }
+  let start = 0;
+  if (kind === "section") start = line + 1;
+  else if (lines[0] && lines[0].trim() === "---") { const e = lines.findIndex((l, i) => i > 0 && l.trim() === "---"); if (e > 0) start = e + 1; }
+  const own = (l) => kind !== "section" && l.replace(/^#+\s*/, "").trim() === basename; // "# Branch" title belongs to the note
+  let end = start;
+  while (end < lines.length && !(isHeading(lines[end]) && !own(lines[end]))) end++;
+  let last = end - 1;
+  while (last >= start && !lines[last].trim()) last--;
+  const at = last + 1;
+  const add = [entry];
+  if (at < lines.length && isHeading(lines[at])) add.push("");
+  lines.splice(at, 0, ...add);
+  return at;
+}
+
 /* ---------- edges ---------- */
 
 // one path for every edge: straight, curved or right-angled, the same in trees and on the map
@@ -605,6 +685,22 @@ class SkillSearchModal extends FuzzySuggestModal {
     el.createDiv({ cls: "st-suggest-sub", text: `${i.available ? "🔓" : STATUS_ICON[i.n.status] || ""} ${i.branch}${i.conName ? " · " + i.conName : ""}` });
   }
   onChooseItem(i) { this.onPick(i); }
+}
+
+class NameModal extends Modal {
+  constructor(app, title, onSubmit) { super(app); this.title = title; this.onSubmit = onSubmit; }
+  onOpen() {
+    this.titleEl.setText(this.title);
+    let value = "";
+    const submit = () => { const v = value.trim(); if (!v) return; this.close(); this.onSubmit(v); };
+    new Setting(this.contentEl).setName(t("skillName")).setDesc(t("skillNameDesc")).addText(tx => {
+      tx.onChange(v => { value = v; });
+      tx.inputEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+      window.setTimeout(() => tx.inputEl.focus(), 0);
+    });
+    new Setting(this.contentEl).addButton(b => b.setButtonText(t("add")).setCta().onClick(submit));
+  }
+  onClose() { this.contentEl.empty(); }
 }
 
 class SkillTreeView extends ItemView {
@@ -702,7 +798,8 @@ class SkillTreeView extends ItemView {
     }
     tool(this.tools, "search", t("find"), false, () => this.openSearch());
     this.nextBtn = tool(this.tools, "sparkles", t("next"), this.nextOpen, () => this.toggleNext());
-    tool(this.tools, "maximize", t("fit"), false, () => this.fit());
+    tool(this.tools, "image", t("exportPng"), false, () => this.exportPng());
+    tool(this.tools, "maximize", t("fit"), false, () => this.fit(true));
     return true;
   }
 
@@ -765,6 +862,7 @@ class SkillTreeView extends ItemView {
     const NS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(NS, "svg");
     svg.addClass("st-svg");
+    if (refit) svg.addClass("st-enter");
     const g = document.createElementNS(NS, "g");
     svg.appendChild(g);
     this.svg = svg; this.g = g;
@@ -817,6 +915,7 @@ class SkillTreeView extends ItemView {
     const NS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(NS, "svg");
     svg.addClass("st-svg");
+    if (refit) svg.addClass("st-enter");
     const g = document.createElementNS(NS, "g");
     svg.appendChild(g);
     this.svg = svg; this.g = g;
@@ -880,13 +979,110 @@ class SkillTreeView extends ItemView {
     if (!n.file || n.line == null) return;
     let ok = false;
     this.repin = n.id;
+    const stamp = this.plugin.settings.stampLearned !== false && (ch === "x" || ch === "*") && !n.learned;
     await this.app.vault.process(n.file, (text) => {
-      const lines = text.split("\n");
+      const eol = text.includes("\r\n") ? "\r\n" : "\n";
+      const lines = text.split(eol);
       const next = (lines[n.line] || "").replace(/^(\s*[-*+]\s+\[).(\])/, (m, a, b) => { ok = true; return a + ch + b; });
       lines[n.line] = next;
-      return lines.join("\n");
+      if (ok && stamp) {
+        const { indent } = childSlot(lines, n.line);
+        lines.splice(n.line + 1, 0, `${indent}- learned:: ${moment().format("YYYY-MM-DD")}`);
+      }
+      return lines.join(eol);
     });
     if (!ok) { this.repin = null; new Notice(t("setStatusFail")); }
+  }
+
+  // right click on a node: add a child skill, change status, open the note
+  nodeMenu(n, ev) {
+    const menu = new Menu();
+    const canAdd = n.file && (n.kind === "item" || n.kind === "section" || (n.kind === "branch" && n.line == null));
+    if (canAdd) menu.addItem(i => i.setTitle(t("addSkill")).setIcon("plus").onClick(() => {
+      new NameModal(this.app, t("addSkillTitle", n.name), (name) => this.addSkill(n, name)).open();
+    }));
+    if (n.file && n.line != null && (n.kind === "item" || n.kind === "legendary")) {
+      menu.addSeparator();
+      for (const [ch, st] of STATUS_CHARS) {
+        menu.addItem(i => i.setTitle(t(st)).setChecked(n.status === st).onClick(() => { if (n.status !== st) this.setStatus(n, ch); }));
+      }
+    }
+    if (n.file) {
+      menu.addSeparator();
+      menu.addItem(i => i.setTitle(t("openNote")).setIcon("file-text").onClick(() => this.openNode(n)));
+    }
+    menu.showAtMouseEvent(ev);
+  }
+
+  async addSkill(parent, name) {
+    let at = -1;
+    await this.app.vault.process(parent.file, (text) => {
+      const eol = text.includes("\r\n") ? "\r\n" : "\n";
+      const lines = text.split(eol);
+      at = insertSkill(lines, parent.kind, parent.line, name, parent.file.basename);
+      return lines.join(eol);
+    });
+    if (at >= 0) this.repin = `${parent.file.path}#L${at}`;
+  }
+
+  // the whole current tree as a picture, drawn with the colors on screen
+  async exportPng() {
+    if (!this.svg || !this.g) return;
+    this.unpin();
+    const svg = this.svg, far = svg.hasClass("st-far");
+    svg.removeClass("st-far", "st-enter");
+    try {
+      const bb = this.g.getBBox(), pad = 48;
+      const w = bb.width + pad * 2, h = bb.height + pad * 2;
+      const scale = Math.min(2, 8000 / Math.max(w, h));
+      const clone = svg.cloneNode(true);
+      const PROPS = ["fill", "fill-opacity", "stroke", "stroke-width", "stroke-opacity", "stroke-dasharray", "stroke-linecap", "stroke-linejoin",
+        "opacity", "filter", "font-family", "font-size", "font-weight", "font-style", "letter-spacing", "paint-order", "display", "visibility"];
+      const src = [svg, ...svg.querySelectorAll("*")], dst = [clone, ...clone.querySelectorAll("*")];
+      src.forEach((el, i) => {
+        if (i === 0) return;
+        const cs = getComputedStyle(el);
+        dst[i].setAttribute("style", PROPS.map(p => `${p}:${cs.getPropertyValue(p)}`).join(";"));
+      });
+      dst[1].removeAttribute("transform");
+      const NS = "http://www.w3.org/2000/svg";
+      clone.setAttribute("xmlns", NS);
+      clone.setAttribute("viewBox", `${bb.x - pad} ${bb.y - pad} ${w} ${h}`);
+      clone.setAttribute("width", String(Math.round(w * scale)));
+      clone.setAttribute("height", String(Math.round(h * scale)));
+      // background: the canvas color/gradient, the sky stars, else the note background
+      const cv = getComputedStyle(this.canvas), before = getComputedStyle(this.canvas, "::before");
+      const under = this.g.querySelector(".st-under");
+      const color = cv.backgroundColor && cv.backgroundColor !== "rgba(0, 0, 0, 0)" ? cv.backgroundColor
+        : under ? getComputedStyle(under).fill : getComputedStyle(this.contentEl).backgroundColor;
+      const images = [before.backgroundImage, cv.backgroundImage].filter(x => x && x !== "none");
+      clone.setAttribute("style", `background-color:${color};` + (images.length ? `background-image:${images.join(",")};background-size:cover;background-position:center;` : ""));
+      const xml = new XMLSerializer().serializeToString(clone);
+      const img = new Image();
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = color; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      const bin = atob(c.toDataURL("image/png").split(",")[1]);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const label = this.branch === MAP ? t("mapTab")
+        : this.grouped && this.all && this.all.get(this.constellation) ? `${this.branch} - ${this.all.get(this.constellation).name}` : this.branch;
+      const name = `Skill Tree - ${label} - ${moment().format("YYYY-MM-DD HHmm")}.png`.replace(/[\\/:*?"<>|#^[\]]/g, "");
+      const fm = this.app.fileManager;
+      const path = fm.getAvailablePathForAttachment ? await fm.getAvailablePathForAttachment(name, "") : normalizePath(`${this.root}/${name}`);
+      const file = await this.app.vault.createBinary(path, bytes.buffer);
+      new Notice(t("exported", file.path));
+      await this.app.workspace.getLeaf("tab").openFile(file);
+    } catch (e) {
+      console.error("Skill Tree: export failed", e);
+      new Notice(t("exportFail"));
+    } finally {
+      if (far) svg.addClass("st-far");
+    }
   }
 
   skills() { return collectSkills(this.app, this.root, this.branches()); }
@@ -910,7 +1106,8 @@ class SkillTreeView extends ItemView {
   }
 
   animateTo(to) {
-    const from = { ...this.view }, t0 = performance.now(), dur = 450;
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const from = { ...this.view }, t0 = performance.now(), dur = reduce ? 0 : 450;
     return new Promise((done) => {
       const step = (now) => {
         const u = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - u, 3);
@@ -980,50 +1177,83 @@ class SkillTreeView extends ItemView {
     return { minX, minY, maxX, maxY };
   }
 
-  fit() {
+  fit(animate) {
     if (!this.bounds) return;
     const w = this.canvas.clientWidth || 800, h = this.canvas.clientHeight || 600;
     const b = this.bounds, pad = 40;
     const k = Math.min((w - pad * 2) / (b.maxX - b.minX), (h - pad * 2) / (b.maxY - b.minY), 1.5);
-    this.view.k = k;
-    this.view.x = (w - (b.maxX - b.minX) * k) / 2 - b.minX * k;
-    this.view.y = pad - b.minY * k;
+    const to = { k, x: (w - (b.maxX - b.minX) * k) / 2 - b.minX * k, y: pad - b.minY * k };
     this.fitted = true;
+    if (animate) return this.animateTo(to);
+    Object.assign(this.view, to);
     this.apply();
   }
 
   apply() {
-    if (this.g) this.g.setAttribute("transform", `translate(${this.view.x},${this.view.y}) scale(${this.view.k})`);
+    if (!this.g) return;
+    this.g.setAttribute("transform", `translate(${this.view.x},${this.view.y}) scale(${this.view.k})`);
+    // tiny unreadable labels only clutter the picture
+    const s = this.plugin.settings;
+    this.svg.toggleClass("st-far", s.hideFar !== false && this.view.k * (s.textSize || 1) < 0.55);
   }
 
   bindPanZoom() {
     const svg = this.svg;
-    let drag = null;
+    let drag = null, pinch = null;
+    const pts = new Map();
+    const zoomAt = (mx, my, k2, base) => {
+      k2 = Math.min(3, Math.max(0.15, k2));
+      this.view.x = mx - (mx - base.x) * (k2 / base.k);
+      this.view.y = my - (my - base.y) * (k2 / base.k);
+      this.view.k = k2;
+      this.apply();
+    };
+    const two = () => {
+      const [a, b] = [...pts.values()], r = svg.getBoundingClientRect();
+      return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2 - r.left, my: (a.y + b.y) / 2 - r.top };
+    };
     svg.addEventListener("pointerdown", (e) => {
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2) {
+        const p = two();
+        pinch = { ...p, view: { ...this.view } };
+        if (drag) drag.moved = true;
+        return;
+      }
       if (e.target.closest(".st-node")) return;
       drag = { x: e.clientX, y: e.clientY, vx: this.view.x, vy: this.view.y, moved: false };
       svg.setPointerCapture(e.pointerId);
       svg.addClass("is-dragging");
     });
     svg.addEventListener("pointermove", (e) => {
+      if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && pts.size >= 2) {
+        const p = two();
+        // zoom around the first midpoint, then follow the fingers
+        zoomAt(pinch.mx, pinch.my, pinch.view.k * p.d / pinch.d, pinch.view);
+        this.view.x += p.mx - pinch.mx; this.view.y += p.my - pinch.my;
+        this.apply();
+        return;
+      }
       if (!drag) return;
       if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 3) drag.moved = true;
       this.view.x = drag.vx + (e.clientX - drag.x);
       this.view.y = drag.vy + (e.clientY - drag.y);
       this.apply();
     });
-    const end = () => { if (drag && !drag.moved) this.unpin(); drag = null; svg.removeClass("is-dragging"); };
+    const end = (e) => {
+      pts.delete(e.pointerId);
+      if (pinch) { if (pts.size < 2) pinch = null; drag = null; svg.removeClass("is-dragging"); return; }
+      if (drag && !drag.moved) this.unpin();
+      drag = null; svg.removeClass("is-dragging");
+    };
     svg.addEventListener("pointerup", end);
     svg.addEventListener("pointercancel", end);
     svg.addEventListener("wheel", (e) => {
       e.preventDefault();
       const r = svg.getBoundingClientRect();
       const mx = e.clientX - r.left, my = e.clientY - r.top;
-      const k2 = Math.min(3, Math.max(0.15, this.view.k * Math.exp(-e.deltaY * 0.0015)));
-      this.view.x = mx - (mx - this.view.x) * (k2 / this.view.k);
-      this.view.y = my - (my - this.view.y) * (k2 / this.view.k);
-      this.view.k = k2;
-      this.apply();
+      zoomAt(mx, my, this.view.k * Math.exp(-e.deltaY * 0.0015), { ...this.view });
     }, { passive: false });
   }
 
@@ -1086,6 +1316,11 @@ class SkillTreeView extends ItemView {
       if (this.pinned) return;
       this.tooltip.hide(); this.highlight(n, false);
     });
+    if (!onClick) ng.addEventListener("contextmenu", (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      this.tooltip.hide();
+      this.nodeMenu(n, ev);
+    });
     ng.addEventListener("click", (ev) => {
       ev.stopPropagation();
       if (onClick) { this.unpin(); this.tooltip.hide(); return onClick(); }
@@ -1143,6 +1378,20 @@ class SkillTreeView extends ItemView {
         li.createSpan({ cls: "st-req-mark", text: r.missing ? "?" : r.done ? "✓" : "" });
         li.createSpan({ text: r.name });
         if (r.sub) li.createSpan({ cls: "st-req-sub", text: r.sub });
+      }
+    }
+    if (n.learned) card.createDiv({ cls: "st-card-learned", text: `📅 ${t("learnedOn")}: ${fmtDate(n.learned)}` });
+    if (n.sources && n.sources.length) {
+      card.createDiv({ cls: "st-card-label", text: `📚 ${t("sources")}` });
+      const ul = card.createEl("ul", { cls: "st-card-sources" });
+      for (const src of n.sources) {
+        const li = ul.createEl("li");
+        if (src.link) {
+          const a = li.createEl("a", { cls: "internal-link", text: src.text, href: src.link });
+          a.onclick = (e) => { e.preventDefault(); e.stopPropagation(); this.app.workspace.openLinkText(src.link, n.file ? n.file.path : "", "tab"); };
+        } else if (src.url) {
+          li.createEl("a", { cls: "external-link", text: src.text, href: src.url, attr: { target: "_blank", rel: "noopener" } });
+        } else li.createSpan({ text: src.text });
       }
     }
     if (n.extra && n.extra.length) {
@@ -1253,6 +1502,7 @@ module.exports = class SkillTreePlugin extends Plugin {
     };
     this.addCommand({ id: "find-skill", name: t("cmdFind"), callback: withView(v => v.openSearch()) });
     this.addCommand({ id: "whats-next", name: t("cmdNext"), callback: withView(v => v.toggleNext(true)) });
+    this.addCommand({ id: "export-png", name: t("cmdExport"), callback: withView(v => v.exportPng()) });
     this.addSettingTab(new SkillTreeSettingTab(this.app, this));
   }
 
@@ -1332,5 +1582,11 @@ class SkillTreeSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName(t("setGlow")).setDesc(t("setGlowDesc"))
       .addToggle(tg => tg.setValue(this.plugin.settings.glow !== false)
         .onChange(async v => { this.plugin.settings.glow = v; await this.plugin.save(); this.plugin.refreshViews(); }));
+    new Setting(containerEl).setName(t("setHideFar")).setDesc(t("setHideFarDesc"))
+      .addToggle(tg => tg.setValue(this.plugin.settings.hideFar !== false)
+        .onChange(async v => { this.plugin.settings.hideFar = v; await this.plugin.save(); this.plugin.refreshViews(); }));
+    new Setting(containerEl).setName(t("setStampLearned")).setDesc(t("setStampLearnedDesc"))
+      .addToggle(tg => tg.setValue(this.plugin.settings.stampLearned !== false)
+        .onChange(async v => { this.plugin.settings.stampLearned = v; await this.plugin.save(); }));
   }
 }
