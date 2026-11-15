@@ -3,7 +3,7 @@ const { Plugin, ItemView, PluginSettingTab, Setting, Notice, TFile, TFolder, deb
 
 const VIEW_TYPE = "skill-tree-view";
 const MAP = "__map__";
-const DEFAULT_SETTINGS = { folder: "Skills", mapFile: "Map.md", style: "classic", nodes: "star", bar: "tabs" };
+const DEFAULT_SETTINGS = { folder: "Skills", mapFile: "Map.md", style: "classic", nodes: "star", starSize: 1, bar: "tabs" };
 
 const NODE_W = 170;
 const NODE_H = 44;
@@ -21,7 +21,7 @@ const STRINGS = {
     available: "🔓 available", wantAvailable: "✨ want · available",
     map: "🗺 Map", mapTab: "Map", view: "View", close: "Close", openNote: "Open note", pinHint: "Click to pin · Ctrl+click opens the note",
     setStyle: "Look", setStyleDesc: "How the skill tree is drawn.", styleClassic: "Classic", styleSky: "Night sky", styleSoft: "Soft",
-    setNodes: "Nodes", setNodesDesc: "Same in every layout and on the map.", nodesStar: "Stars with a label", nodesBox: "Boxes with text inside", up: "▲ up", radial: "◎ star", vertical: "↓ top-down", horizontal: "→ left-right",
+    setNodes: "Nodes", setNodesDesc: "Same in every layout and on the map.", nodesStar: "Stars with a label", nodesBox: "Boxes with text inside", setStarSize: "Star size", setStarSizeDesc: "For star nodes: how big the stars are.", up: "▲ up", radial: "◎ star", vertical: "↓ top-down", horizontal: "→ left-right",
     all: "All", grouped: "By group", fit: "⤢ fit",
     noFolder: (f) => `No branch folders in “${f}” yet.`, noNodes: "No notes with type: branch in this folder.",
     createExample: "Create example tree", exampleCreated: (f) => `Example tree created in ${f}`,
@@ -37,7 +37,7 @@ const STRINGS = {
     available: "🔓 доступно", wantAvailable: "✨ хочу · доступно",
     map: "🗺 Карта", mapTab: "Карта", view: "Вид", close: "Закрыть", openNote: "Открыть заметку", pinHint: "Клик — закрепить · Ctrl+клик — открыть заметку",
     setStyle: "Оформление", setStyleDesc: "Как рисуется дерево навыков.", styleClassic: "Классика", styleSky: "Ночное небо", styleSoft: "Мягкое",
-    setNodes: "Узлы", setNodesDesc: "Одинаково во всех видах и на карте.", nodesStar: "Звёзды с подписью", nodesBox: "Блоки с текстом внутри", up: "▲ вверх", radial: "◎ звезда", vertical: "↓ сверху", horizontal: "→ слева",
+    setNodes: "Узлы", setNodesDesc: "Одинаково во всех видах и на карте.", nodesStar: "Звёзды с подписью", nodesBox: "Блоки с текстом внутри", setStarSize: "Размер звёзд", setStarSizeDesc: "Для узлов-звёзд: насколько они крупные.", up: "▲ вверх", radial: "◎ звезда", vertical: "↓ сверху", horizontal: "→ слева",
     all: "Все", grouped: "По группам", fit: "⤢ вписать",
     noFolder: (f) => `В «${f}» пока нет папок-веток.`, noNodes: "В этой папке нет заметок с type: branch.",
     createExample: "Создать пример дерева", exampleCreated: (f) => `Пример создан в ${f}`,
@@ -841,6 +841,7 @@ class SkillTreeView extends ItemView {
     const text = document.createElementNS(NS, "text");
     text.setAttribute("dominant-baseline", "central");
     if (star) {
+      r *= this.plugin.settings.starSize || 1;
       el("circle", { r, class: "st-under" });
       el("circle", { r, class: "st-body" });
       text.setAttribute("class", "st-label");
@@ -1083,5 +1084,8 @@ class SkillTreeSettingTab extends PluginSettingTab {
       .addDropdown(d => d.addOptions({ star: t("nodesStar"), box: t("nodesBox") })
         .setValue(this.plugin.settings.nodes || "star")
         .onChange(async v => { this.plugin.settings.nodes = v; await this.plugin.save(); this.plugin.refreshViews(); }));
+    new Setting(containerEl).setName(t("setStarSize")).setDesc(t("setStarSizeDesc"))
+      .addSlider(sl => sl.setLimits(0.6, 1.8, 0.1).setValue(this.plugin.settings.starSize || 1).setDynamicTooltip()
+        .onChange(async v => { this.plugin.settings.starSize = v; await this.plugin.save(); this.plugin.refreshViews(); }));
   }
 }
