@@ -668,9 +668,21 @@ class SkillTreeView extends ItemView {
         : roots;
       if (cons.length) {
         if (!cons.some(c => c.id === this.constellation)) this.constellation = cons[0].id;
+        // skills under each constellation, for the little progress line
+        const under = (id) => { const out = []; const walk = (p) => { for (const n of nodes.values()) if (n.parents[0] === p) { out.push(n); walk(n.id); } }; walk(id); return out; };
         for (const c of cons) {
-          const chip = this.subbar.createDiv({ text: c.name, cls: "st-chip" + (c.id === this.constellation ? " is-active" : "") });
-          chip.onclick = () => { this.constellation = c.id; this.render(true); };
+          const items = under(c.id).filter(n => !isGroup(n));
+          const done = items.filter(n => n.status === "known" || n.status === "mastered").length;
+          const learning = items.filter(n => n.status === "learning").length;
+          const tab = this.subbar.createDiv({ cls: "st-con" + (c.id === this.constellation ? " is-active" : "") });
+          tab.createSpan({ cls: "st-con-name", text: c.name });
+          if (items.length) {
+            tab.createSpan({ cls: "st-con-count", text: `${done}/${items.length}` });
+            const bar = tab.createDiv("st-con-bar");
+            setVars(bar.createDiv("st-con-done"), { "--st-w": `${(100 * done / items.length).toFixed(1)}%` });
+            setVars(bar.createDiv("st-con-learning"), { "--st-w": `${(100 * learning / items.length).toFixed(1)}%` });
+          }
+          tab.onclick = () => { this.constellation = c.id; this.render(true); };
         }
         const keep = new Set([this.constellation]);
         for (let grew = true; grew;) {

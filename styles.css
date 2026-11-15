@@ -27,12 +27,20 @@
 .st-tool-group { display: flex; gap: 1px; padding: 2px; margin-right: 6px; border-radius: 6px; background: var(--background-secondary); }
 .st-tools .st-tool.is-active { color: var(--interactive-accent); background: var(--background-modifier-hover); }
 
-/* constellation chips */
-.st-subbar { display: flex; gap: 6px; padding: 8px 10px 0; flex-wrap: wrap; }
-.st-subbar .st-chip { padding: 3px 11px; border-radius: 999px; border: 1px solid var(--background-modifier-border);
-  font-size: var(--font-ui-smaller); color: var(--text-muted); cursor: pointer; transition: all .15s; }
-.st-subbar .st-chip:hover { color: var(--text-normal); border-color: var(--background-modifier-border-hover); }
-.st-subbar .st-chip.is-active { color: var(--text-on-accent); background: var(--interactive-accent); border-color: transparent; }
+/* constellation tabs: name, done/total and a thin progress line */
+.st-subbar { display: flex; gap: 2px; padding: 5px 8px; overflow-x: auto; border-bottom: 1px solid var(--background-modifier-border); }
+.st-subbar::-webkit-scrollbar { display: none; }
+.st-con { position: relative; display: flex; align-items: baseline; gap: 6px; padding: 4px 10px 8px; border-radius: 6px;
+  font-size: var(--font-ui-smaller); color: var(--text-muted); white-space: nowrap; cursor: pointer; transition: color .15s, background-color .15s; }
+.st-con:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
+.st-con.is-active { color: var(--text-normal); background: var(--background-modifier-hover); font-weight: 600; }
+.st-con-count { font-size: 10px; font-weight: 400; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.st-con-bar { position: absolute; left: 10px; right: 10px; bottom: 3px; height: 2px; display: flex; border-radius: 2px; overflow: hidden;
+  background: var(--background-modifier-border); }
+.st-con-done, .st-con-learning { width: var(--st-w, 0); height: 100%; }
+.st-con-done { background: var(--color-green); }
+.st-con-learning { background: var(--color-yellow); opacity: .7; }
+.st-con.is-active .st-con-bar { height: 3px; bottom: 2px; }
 
 /* ---------- canvas ---------- */
 .st-canvas { flex: 1; position: relative; min-height: 0; }
