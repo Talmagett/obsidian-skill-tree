@@ -58,7 +58,16 @@ const t = (key, ...args) => {
 
 async function buildGraph(app, folderPath) {
   const nodes = new Map(); // id -> node
-  const files = app.vault.getMarkdownFiles().filter(f => f.path.startsWith(folderPath + "/"));
+  // only the notes inside this branch folder, not the whole vault
+  const files = [];
+  const walk = (folder) => {
+    for (const c of folder.children) {
+      if (c instanceof TFolder) walk(c);
+      else if (c instanceof TFile && c.extension === "md") files.push(c);
+    }
+  };
+  const root = app.vault.getAbstractFileByPath(folderPath);
+  if (root instanceof TFolder) walk(root);
 
   const addNode = (n) => { n.parents = n.parents || []; nodes.set(n.id, n); return n; };
 

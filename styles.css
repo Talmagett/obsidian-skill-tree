@@ -1,4 +1,5 @@
-.st-root { position: relative; display: flex; flex-direction: column; padding: 0 !important; overflow: hidden; }
+.st-root { position: relative; display: flex; flex-direction: column; overflow: hidden; }
+.workspace-leaf-content[data-type="skill-tree-view"] .view-content.st-root { padding: 0; }
 .st-toolbar { display: flex; gap: 6px; padding: 8px; flex-wrap: wrap; border-bottom: 1px solid var(--background-modifier-border); }
 .st-toolbar .st-fit { margin-left: auto; }
 .st-viewbar, .st-subbar { padding-top: 6px; padding-bottom: 6px; align-items: center; }
@@ -40,7 +41,7 @@
 /* hover: dim everything except the node and its requirements */
 .st-svg.st-hovering .st-node:not(.st-hover):not(.st-req) { opacity: .2; }
 .st-svg.st-hovering .st-edge { opacity: .2; }
-.st-node.st-req { opacity: 1 !important; }
+.st-svg .st-node.st-req { opacity: 1; }
 .st-node.st-req :is(rect, circle) { stroke: var(--color-red); stroke-width: 3.5; stroke-dasharray: none; }
 .st-node.st-req-met :is(rect, circle) { stroke: var(--color-green); }
 @keyframes st-pulse { 50% { stroke-opacity: .35; } }
