@@ -3,7 +3,7 @@ const { Plugin, ItemView, PluginSettingTab, Setting, Notice, TFile, TFolder, deb
 
 const VIEW_TYPE = "skill-tree-view";
 const MAP = "__map__";
-const DEFAULT_SETTINGS = { folder: "Skills", mapFile: "Map.md", style: "classic", bar: "tabs" };
+const DEFAULT_SETTINGS = { folder: "Skills", mapFile: "Map.md", style: "classic", nodes: "star", bar: "tabs" };
 
 const NODE_W = 170;
 const NODE_H = 44;
@@ -20,7 +20,8 @@ const STRINGS = {
     mastered: "⭐ mastered", known: "✅ known", learning: "🔥 learning", want: "✨ want", locked: "🔒 locked", branch: "branch",
     available: "🔓 available", wantAvailable: "✨ want · available",
     map: "🗺 Map", mapTab: "Map", view: "View", close: "Close", openNote: "Open note", pinHint: "Click to pin · Ctrl+click opens the note",
-    setStyle: "Look", setStyleDesc: "How the skill tree is drawn.", styleClassic: "Classic", styleSky: "Night sky", styleSoft: "Soft", up: "▲ up", radial: "◎ star", vertical: "↓ top-down", horizontal: "→ left-right",
+    setStyle: "Look", setStyleDesc: "How the skill tree is drawn.", styleClassic: "Classic", styleSky: "Night sky", styleSoft: "Soft",
+    setNodes: "Nodes", setNodesDesc: "Same in every layout and on the map.", nodesStar: "Stars with a label", nodesBox: "Boxes with text inside", up: "▲ up", radial: "◎ star", vertical: "↓ top-down", horizontal: "→ left-right",
     all: "All", grouped: "By group", fit: "⤢ fit",
     noFolder: (f) => `No branch folders in “${f}” yet.`, noNodes: "No notes with type: branch in this folder.",
     createExample: "Create example tree", exampleCreated: (f) => `Example tree created in ${f}`,
@@ -35,7 +36,8 @@ const STRINGS = {
     mastered: "⭐ мастер", known: "✅ умею", learning: "🔥 качаю", want: "✨ хочу", locked: "🔒 закрыт", branch: "ветка",
     available: "🔓 доступно", wantAvailable: "✨ хочу · доступно",
     map: "🗺 Карта", mapTab: "Карта", view: "Вид", close: "Закрыть", openNote: "Открыть заметку", pinHint: "Клик — закрепить · Ctrl+клик — открыть заметку",
-    setStyle: "Оформление", setStyleDesc: "Как рисуется дерево навыков.", styleClassic: "Классика", styleSky: "Ночное небо", styleSoft: "Мягкое", up: "▲ вверх", radial: "◎ звезда", vertical: "↓ сверху", horizontal: "→ слева",
+    setStyle: "Оформление", setStyleDesc: "Как рисуется дерево навыков.", styleClassic: "Классика", styleSky: "Ночное небо", styleSoft: "Мягкое",
+    setNodes: "Узлы", setNodesDesc: "Одинаково во всех видах и на карте.", nodesStar: "Звёзды с подписью", nodesBox: "Блоки с текстом внутри", up: "▲ вверх", radial: "◎ звезда", vertical: "↓ сверху", horizontal: "→ слева",
     all: "Все", grouped: "По группам", fit: "⤢ вписать",
     noFolder: (f) => `В «${f}» пока нет папок-веток.`, noNodes: "В этой папке нет заметок с type: branch.",
     createExample: "Создать пример дерева", exampleCreated: (f) => `Пример создан в ${f}`,
@@ -305,7 +307,7 @@ async function buildMap(app, rootFolder, mapPath, branchNames) {
   return { branches, legendary, center, mapFile: mapFile instanceof TFile ? mapFile : null };
 }
 
-function mapLayout(data, mode = "radial") {
+function mapLayout(data, mode = "radial", box = false) {
   const B = Math.max(1, data.branches.length);
   const R1 = 280, R2 = 600;
   const nodes = [], edges = [];
@@ -396,7 +398,10 @@ function mapLayout(data, mode = "radial") {
     const axis = mode === "horizontal" ? "y" : "x";
     const others = nodes.filter(n => n.kind === "map-con").map(n => n[axis]);
     if (leg.length > 1 && others.length) {
-      const lo = Math.min(...others), hi = Math.max(...others);
+      let lo = Math.min(...others), hi = Math.max(...others);
+      // boxes are wide: keep at least a box and a gap between neighbours
+      const need = leg.length * (axis === "x" && box ? NODE_W + 40 : 0);
+      if (hi - lo < need) { const c = (lo + hi) / 2; lo = c - need / 2; hi = c + need / 2; }
       leg.sort((a, b) => a.c0[axis] - b.c0[axis]).forEach((n, i) => { n[axis] = lo + ((i + 0.5) / leg.length) * (hi - lo); });
     }
   }
@@ -405,7 +410,7 @@ function mapLayout(data, mode = "radial") {
 
 /* ---------- layout: BFS spanning tree + tidy x ---------- */
 
-function layout(nodes, rootName, mode = "radial") {
+function layout(nodes, rootName, mode = "radial", box = false) {
   const children = new Map();
   for (const id of nodes.keys()) children.set(id, []);
   for (const n of nodes.values()) for (const p of n.parents) children.get(p).push(n.id);
@@ -463,10 +468,11 @@ function layout(nodes, rootName, mode = "radial") {
 
   // positions are node centers
   const pos = new Map();
-  const ring = Math.max(170, (90 * leaves) / (2 * Math.PI * Math.max(1, maxDepth)));
+  const ring = box ? Math.max(230, (190 * leaves) / (2 * Math.PI * Math.max(1, maxDepth)))
+    : Math.max(170, (90 * leaves) / (2 * Math.PI * Math.max(1, maxDepth)));
   for (const [id, s] of slot) {
     const d = placed.get(id).depth;
-    if (mode === "up") pos.set(id, { x: s * 175, y: -d * 120 });
+    if (mode === "up") pos.set(id, box ? { x: s * (NODE_W + GAP_X), y: -d * LEVEL_H } : { x: s * 175, y: -d * 120 });
     else if (mode === "vertical") pos.set(id, { x: s * (NODE_W + GAP_X), y: d * LEVEL_H });
     else if (mode === "horizontal") pos.set(id, { x: d * (NODE_W + 80), y: s * (NODE_H + 14) });
     else {
@@ -628,10 +634,10 @@ class SkillTreeView extends ItemView {
     }
 
     this.persist();
-    const { all, pos, edges } = layout(shown, this.branch, this.mode);
+    const star = this.plugin.settings.nodes !== "box";
+    const { all, pos, edges } = layout(shown, this.branch, this.mode, !star);
     const lookup = new Map(all);
     for (const [k, v] of nodes) if (!lookup.has(k)) lookup.set(k, v);
-    const radial = this.mode === "radial" || this.mode === "up";
     const R = (n) => (n.kind === "virtual" || (n.kind === "branch" && !n.parents.length) ? 26 : isGroup(n) ? 20 : 13);
     const NS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(NS, "svg");
@@ -645,12 +651,13 @@ class SkillTreeView extends ItemView {
       const a = pos.get(e.from), b = pos.get(e.to);
       if (!a || !b) continue;
       let d;
-      if (radial) d = `M${a.x},${a.y} L${b.x},${b.y}`;
+      if (star || this.mode === "radial") d = `M${a.x},${a.y} L${b.x},${b.y}`;
       else if (this.mode === "horizontal") {
         const x1 = a.x + NODE_W / 2, x2 = b.x - NODE_W / 2, mx = (x1 + x2) / 2;
         d = `M${x1},${a.y} C${mx},${a.y} ${mx},${b.y} ${x2},${b.y}`;
       } else {
-        const y1 = a.y + NODE_H / 2, y2 = b.y - NODE_H / 2, my = (y1 + y2) / 2;
+        const up = this.mode === "up" ? -1 : 1;
+        const y1 = a.y + up * NODE_H / 2, y2 = b.y - up * NODE_H / 2, my = (y1 + y2) / 2;
         d = `M${a.x},${y1} C${a.x},${my} ${b.x},${my} ${b.x},${y2}`;
       }
       const path = document.createElementNS(NS, "path");
@@ -670,30 +677,7 @@ class SkillTreeView extends ItemView {
       this.els.set(n.id, ng);
       ng.setAttribute("class", `st-node st-${n.status} st-kind-${n.kind}` + (n.available ? " st-available" : ""));
       ng.setAttribute("transform", `translate(${p.x},${p.y})`);
-      const text = document.createElementNS(NS, "text");
-      text.setAttribute("text-anchor", "middle"); text.setAttribute("dominant-baseline", "central");
-      if (radial) {
-        // star: solid underlay (hides edges behind the node) + circle + label underneath
-        const u = document.createElementNS(NS, "circle");
-        u.setAttribute("r", R(n));
-        u.setAttribute("class", "st-under");
-        ng.appendChild(u);
-        const c = document.createElementNS(NS, "circle");
-        c.setAttribute("r", R(n));
-        c.setAttribute("class", "st-body");
-        ng.appendChild(c);
-        text.setAttribute("y", R(n) + 12);
-        text.setAttribute("class", "st-label");
-        text.textContent = n.name;
-      } else {
-        const rect = document.createElementNS(NS, "rect");
-        rect.setAttribute("x", -NODE_W / 2); rect.setAttribute("y", -NODE_H / 2);
-        rect.setAttribute("width", NODE_W); rect.setAttribute("height", NODE_H);
-        rect.setAttribute("rx", n.kind === "item" ? 22 : 8);
-        ng.appendChild(rect);
-        text.textContent = n.name.length > 22 ? n.name.slice(0, 21) + "…" : n.name;
-      }
-      ng.appendChild(text);
+      this.drawNode(ng, n, star, R(n));
 
       this.bindNode(ng, n);
       g.appendChild(ng);
@@ -711,7 +695,8 @@ class SkillTreeView extends ItemView {
     this.persist();
     const data = await buildMap(this.app, this.root, this.plugin.mapPath(), this.branches());
     const mode = this.mode;
-    const { nodes, edges } = mapLayout(data, mode);
+    const star = this.plugin.settings.nodes !== "box";
+    const { nodes, edges } = mapLayout(data, mode, !star);
     this.canvas.empty();
 
     const NS = "http://www.w3.org/2000/svg";
@@ -744,31 +729,12 @@ class SkillTreeView extends ItemView {
       const cls = n.kind === "legendary" ? `st-${n.status}` : "st-branch";
       ng.setAttribute("class", `st-node st-map-${n.kind} ${cls}` + (n.available ? " st-available" : ""));
       ng.setAttribute("transform", `translate(${n.x},${n.y})`);
-      const u = document.createElementNS(NS, "circle");
-      u.setAttribute("r", n.r);
-      u.setAttribute("class", "st-under");
-      ng.appendChild(u);
-      const c = document.createElementNS(NS, "circle");
-      c.setAttribute("r", n.r);
-      c.setAttribute("class", "st-body");
+      this.drawNode(ng, n, star, n.r, mode === "horizontal" && n.kind === "map-con");
       if (n.stats && n.stats.total) {
         // brighter = more skills you already have (st-p-0 … st-p-10)
         const p = (n.stats.done + 0.5 * n.stats.learning) / n.stats.total;
         ng.addClass(`st-p-${Math.round(p * 10)}`);
       }
-      ng.appendChild(c);
-      const text = document.createElementNS(NS, "text");
-      text.setAttribute("dominant-baseline", "central");
-      if (mode === "horizontal" && n.kind === "map-con") {
-        text.setAttribute("text-anchor", "start");
-        text.setAttribute("x", n.r + 8);
-      } else {
-        text.setAttribute("text-anchor", "middle");
-        text.setAttribute("y", n.r + 12);
-      }
-      text.setAttribute("class", "st-label");
-      text.textContent = n.name;
-      ng.appendChild(text);
 
       this.bindNode(ng, n, n.go ? () => {
         this.branch = n.go.branch;
@@ -861,6 +827,35 @@ class SkillTreeView extends ItemView {
       el.toggleClass("st-req", on);
       el.toggleClass("st-req-met", on && met);
     }
+  }
+
+  // one node: a star (circle + label under it) or a box (text inside), same in every view and on the map
+  drawNode(ng, n, star, r, labelRight = false) {
+    const NS = "http://www.w3.org/2000/svg";
+    const el = (tag, attrs) => {
+      const e = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+      ng.appendChild(e);
+      return e;
+    };
+    const text = document.createElementNS(NS, "text");
+    text.setAttribute("dominant-baseline", "central");
+    if (star) {
+      el("circle", { r, class: "st-under" });
+      el("circle", { r, class: "st-body" });
+      text.setAttribute("class", "st-label");
+      if (labelRight) { text.setAttribute("text-anchor", "start"); text.setAttribute("x", r + 8); }
+      else { text.setAttribute("text-anchor", "middle"); text.setAttribute("y", r + 12); }
+      text.textContent = n.name;
+    } else {
+      ng.addClass("st-boxed");
+      const box = { x: -NODE_W / 2, y: -NODE_H / 2, width: NODE_W, height: NODE_H, rx: n.kind === "item" || n.kind === "legendary" ? NODE_H / 2 : 8 };
+      el("rect", { ...box, class: "st-under" });
+      el("rect", { ...box, class: "st-body" });
+      text.setAttribute("text-anchor", "middle");
+      text.textContent = n.name.length > 22 ? n.name.slice(0, 21) + "…" : n.name;
+    }
+    ng.appendChild(text);
   }
 
   // hover shows the card; click pins it (map branches/constellations navigate instead)
@@ -1084,5 +1079,9 @@ class SkillTreeSettingTab extends PluginSettingTab {
       .addDropdown(d => d.addOptions({ classic: t("styleClassic"), sky: t("styleSky"), soft: t("styleSoft") })
         .setValue(this.plugin.settings.style || "classic")
         .onChange(async v => { this.plugin.settings.style = v; await this.plugin.save(); this.plugin.refreshViews(); }));
+    new Setting(containerEl).setName(t("setNodes")).setDesc(t("setNodesDesc"))
+      .addDropdown(d => d.addOptions({ star: t("nodesStar"), box: t("nodesBox") })
+        .setValue(this.plugin.settings.nodes || "star")
+        .onChange(async v => { this.plugin.settings.nodes = v; await this.plugin.save(); this.plugin.refreshViews(); }));
   }
 }
