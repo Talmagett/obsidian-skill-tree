@@ -1,5 +1,5 @@
 /* Skill Tree — an RPG-style skill tree built from your notes (plain JS, no bundler) */
-const { Plugin, ItemView, PluginSettingTab, Setting, Notice, TFile, TFolder, debounce, normalizePath, moment, setIcon } = require("obsidian");
+const { Plugin, ItemView, FuzzySuggestModal, PluginSettingTab, Setting, Notice, TFile, TFolder, debounce, normalizePath, moment, setIcon } = require("obsidian");
 
 const VIEW_TYPE = "skill-tree-view";
 const MAP = "__map__";
@@ -28,7 +28,9 @@ const STRINGS = {
     exampleExists: (f) => `${f} already exists`,
     requires: "Requires:", requiresAny: "Requires one of:", and: "  and  ", or: "  or  ",
     unnamed: "(unnamed)", me: "Me",
-    cmdOpen: "Open", cmdExample: "Create example tree",
+    cmdOpen: "Open", cmdExample: "Create example tree", cmdFind: "Find a skill", cmdNext: "What's next",
+    find: "Find a skill", findPlaceholder: "Skill name…", next: "What's next", nextLearning: "Learning now", nextAvailable: "Ready to start",
+    nextEmpty: "Nothing here yet: mark a skill as known and the next ones unlock.", setStatusFail: "Could not find the checkbox on that line.",
     setFolder: "Skills folder", setFolderDesc: "Each subfolder is a branch; each note inside it with type: branch is a constellation.",
     setMap: "Map file", setMapDesc: "Note inside the skills folder with the map center and legendary skills.",
   },
@@ -44,7 +46,9 @@ const STRINGS = {
     exampleExists: (f) => `${f} уже существует`,
     requires: "Требует:", requiresAny: "Требует одно из:", and: "  и  ", or: "  или  ",
     unnamed: "(без имени)", me: "Я",
-    cmdOpen: "Открыть", cmdExample: "Создать пример дерева",
+    cmdOpen: "Открыть", cmdExample: "Создать пример дерева", cmdFind: "Найти навык", cmdNext: "Что дальше",
+    find: "Найти навык", findPlaceholder: "Название навыка…", next: "Что дальше", nextLearning: "Качаю сейчас", nextAvailable: "Можно начинать",
+    nextEmpty: "Пока пусто: отметь навык изученным, и откроются следующие.", setStatusFail: "Не нашёл чекбокс на этой строке.",
     setFolder: "Папка навыков", setFolderDesc: "Каждая подпапка — ветка, каждая заметка в ней с type: branch — созвездие.",
     setMap: "Файл карты", setMapDesc: "Заметка в папке навыков с центром карты и легендарными навыками.",
   },
@@ -555,6 +559,54 @@ const setVars = (el, vars) => {
   else for (const [k, v] of Object.entries(vars)) el.style.setProperty(k, v);
 };
 
+const STATUS_ICON = { known: "✅", mastered: "⭐", learning: "🔥", want: "✨", locked: "🔒" };
+// checkbox char for each status, in the order the card shows them
+const STATUS_CHARS = [[" ", "locked"], [">", "want"], ["/", "learning"], ["x", "known"], ["*", "mastered"]];
+
+// every skill of every branch, with its constellation (for search and "what's next")
+async function collectSkills(app, root, branchNames) {
+  const out = [];
+  for (const b of branchNames) {
+    const nodes = await buildGraph(app, `${root}/${b}`);
+    const roots = [...nodes.values()].filter(n => !n.parents.length);
+    // the constellation is the group right under the branch root (or the root itself when there are several)
+    const conOf = (n) => {
+      const seen = new Set();
+      for (let cur = n; cur && !seen.has(cur.id);) {
+        seen.add(cur.id);
+        const p = nodes.get(cur.parents[0]);
+        if (!p) return roots.length > 1 ? cur : null;
+        if (roots.length === 1 && !p.parents.length) return isGroup(cur) ? cur : null;
+        cur = p;
+      }
+      return null;
+    };
+    for (const n of nodes.values()) {
+      if (isGroup(n)) continue;
+      const c = conOf(n);
+      out.push({ n, branch: b, con: c ? c.id : null, conName: c ? c.name : "",
+        available: (n.status === "locked" || n.status === "want") && reqsMet(n, nodes) });
+    }
+  }
+  return out;
+}
+
+class SkillSearchModal extends FuzzySuggestModal {
+  constructor(app, items, onPick) {
+    super(app);
+    this.items = items; this.onPick = onPick;
+    this.setPlaceholder(t("findPlaceholder"));
+  }
+  getItems() { return this.items; }
+  getItemText(i) { return i.n.name; }
+  renderSuggestion(m, el) {
+    super.renderSuggestion(m, el);
+    const i = m.item;
+    el.createDiv({ cls: "st-suggest-sub", text: `${i.available ? "🔓" : STATUS_ICON[i.n.status] || ""} ${i.branch}${i.conName ? " · " + i.conName : ""}` });
+  }
+  onChooseItem(i) { this.onPick(i); }
+}
+
 class SkillTreeView extends ItemView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -584,6 +636,9 @@ class SkillTreeView extends ItemView {
     this.tooltip = root.createDiv("st-card");
     this.tooltip.hide();
     this.pinned = null;
+    this.nextEl = root.createDiv("st-next");
+    this.nextEl.hide();
+    this.nextOpen = false;
 
     this.registerEvent(this.app.metadataCache.on("changed", debounce(() => this.render(false), 400, true)));
     this.registerEvent(this.app.vault.on("rename", debounce(() => this.render(true), 400, true)));
@@ -645,6 +700,8 @@ class SkillTreeView extends ItemView {
     if (this.branch !== MAP) {
       tool(this.tools, "layers", this.grouped ? t("all") : t("grouped"), this.grouped, () => { this.grouped = !this.grouped; this.render(true); });
     }
+    tool(this.tools, "search", t("find"), false, () => this.openSearch());
+    this.nextBtn = tool(this.tools, "sparkles", t("next"), this.nextOpen, () => this.toggleNext());
     tool(this.tools, "maximize", t("fit"), false, () => this.fit());
     return true;
   }
@@ -701,6 +758,7 @@ class SkillTreeView extends ItemView {
     this.persist();
     const star = this.plugin.settings.nodes !== "box";
     const { all, pos, edges } = layout(shown, this.branch, this.mode, !star);
+    this.pos = pos;
     const lookup = new Map(all);
     for (const [k, v] of nodes) if (!lookup.has(k)) lookup.set(k, v);
     const R = (n) => (n.kind === "virtual" || (n.kind === "branch" && !n.parents.length) ? 26 : isGroup(n) ? 20 : 13);
@@ -743,6 +801,7 @@ class SkillTreeView extends ItemView {
     this.bounds = this.computeBounds(pos);
     this.bindPanZoom();
     if (refit || !this.fitted) this.fit(); else this.apply();
+    this.afterRender();
   }
 
   async renderMap(refit) {
@@ -794,9 +853,113 @@ class SkillTreeView extends ItemView {
     }
 
     this.canvas.appendChild(svg);
-    this.bounds = this.computeBounds(new Map(nodes.map(n => [n.id, n])));
+    this.pos = new Map(nodes.map(n => [n.id, n]));
+    this.bounds = this.computeBounds(this.pos);
     this.bindPanZoom();
     if (refit || !this.fitted) this.fit(); else this.apply();
+    this.afterRender();
+  }
+
+  afterRender() {
+    if (this.repin) { const id = this.repin; this.repin = null; this.pinById(id); }
+    if (this.nextOpen) this.fillNext();
+  }
+
+  pinById(id) {
+    const n = this.all && this.all.get(id), el = this.els && this.els.get(id);
+    if (!n || !el) return;
+    this.unpin();
+    const r = el.getBoundingClientRect();
+    this.pinned = n;
+    this.highlight(n, true);
+    this.showTip(n, { clientX: r.right, clientY: r.top + r.height / 2 }, true);
+  }
+
+  // change the checkbox in the note: "- [ ]" -> "- [x]" and so on
+  async setStatus(n, ch) {
+    if (!n.file || n.line == null) return;
+    let ok = false;
+    this.repin = n.id;
+    await this.app.vault.process(n.file, (text) => {
+      const lines = text.split("\n");
+      const next = (lines[n.line] || "").replace(/^(\s*[-*+]\s+\[).(\])/, (m, a, b) => { ok = true; return a + ch + b; });
+      lines[n.line] = next;
+      return lines.join("\n");
+    });
+    if (!ok) { this.repin = null; new Notice(t("setStatusFail")); }
+  }
+
+  skills() { return collectSkills(this.app, this.root, this.branches()); }
+
+  async openSearch() {
+    const items = await this.skills();
+    new SkillSearchModal(this.app, items, (i) => this.focusSkill(i)).open();
+  }
+
+  // open the skill's branch and constellation, fly to the node and pin its card
+  async focusSkill(i) {
+    this.branch = i.branch;
+    if (i.con) { this.constellation = i.con; } else this.grouped = false;
+    await this.render(true);
+    const p = this.pos && this.pos.get(i.n.id);
+    if (!p) return;
+    const w = this.canvas.clientWidth || 800, h = this.canvas.clientHeight || 600;
+    const k = Math.max(this.view.k, 1);
+    await this.animateTo({ k, x: w / 2 - p.x * k, y: h / 2 - p.y * k });
+    this.pinById(i.n.id);
+  }
+
+  animateTo(to) {
+    const from = { ...this.view }, t0 = performance.now(), dur = 450;
+    return new Promise((done) => {
+      const step = (now) => {
+        const u = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - u, 3);
+        for (const key of ["x", "y", "k"]) this.view[key] = from[key] + (to[key] - from[key]) * e;
+        this.apply();
+        if (u < 1) window.requestAnimationFrame(step); else done();
+      };
+      window.requestAnimationFrame(step);
+      // finish anyway if frames are throttled (hidden window)
+      window.setTimeout(() => { Object.assign(this.view, to); this.apply(); done(); }, dur + 300);
+    });
+  }
+
+  toggleNext(force) {
+    this.nextOpen = force !== undefined ? force : !this.nextOpen;
+    this.nextEl.toggle(this.nextOpen);
+    if (this.nextBtn) this.nextBtn.toggleClass("is-active", this.nextOpen);
+    if (this.nextOpen) this.fillNext();
+  }
+
+  // side panel: what you are learning and what is unlocked, across every branch
+  async fillNext() {
+    const items = await this.skills();
+    const panel = this.nextEl;
+    setVars(panel, { "--st-next-top": `${this.canvas.offsetTop + 8}px` });
+    panel.empty();
+    const head = panel.createDiv("st-next-head");
+    head.createDiv({ cls: "st-next-title", text: t("next") });
+    const x = head.createDiv({ cls: "clickable-icon", attr: { "aria-label": t("close") } });
+    setIcon(x, "x");
+    x.onclick = () => this.toggleNext(false);
+    const body = panel.createDiv("st-next-body");
+    const section = (title, list) => {
+      if (!list.length) return;
+      body.createDiv({ cls: "st-next-section", text: `${title} · ${list.length}` });
+      let last = null;
+      for (const i of list) {
+        if (i.branch !== last) { body.createDiv({ cls: "st-next-branch", text: i.branch }); last = i.branch; }
+        const row = body.createDiv("st-next-item");
+        row.createSpan({ cls: "st-next-name", text: i.n.name });
+        if (i.conName) row.createSpan({ cls: "st-next-con", text: i.conName });
+        row.onclick = () => this.focusSkill(i);
+      }
+    };
+    const learning = items.filter(i => i.n.status === "learning");
+    const ready = items.filter(i => i.available);
+    section(`🔥 ${t("nextLearning")}`, learning);
+    section(`🔓 ${t("nextAvailable")}`, ready);
+    if (!learning.length && !ready.length) body.createDiv({ cls: "st-next-empty", text: t("nextEmpty") });
   }
 
   // remember last opened branch / layout / constellation
@@ -986,6 +1149,13 @@ class SkillTreeView extends ItemView {
       const ul = card.createEl("ul", { cls: "st-card-notes" });
       for (const x of n.extra) ul.createEl("li", { text: x });
     }
+    if (pinned && n.file && n.line != null && (n.kind === "item" || n.kind === "legendary")) {
+      const row = card.createDiv("st-card-status");
+      for (const [ch, st] of STATUS_CHARS) {
+        const b = row.createEl("button", { cls: "st-status-btn" + (n.status === st ? " is-active" : ""), text: STATUS_ICON[st], attr: { "aria-label": t(st) } });
+        b.onclick = (e) => { e.stopPropagation(); if (n.status !== st) this.setStatus(n, ch); };
+      }
+    }
     if (pinned && n.file) {
       const btn = card.createEl("button", { cls: "st-card-open mod-cta", text: t("openNote") });
       btn.onclick = (e) => { e.stopPropagation(); this.openNode(n); };
@@ -1076,6 +1246,13 @@ module.exports = class SkillTreePlugin extends Plugin {
     this.addRibbonIcon("git-fork", "Skill Tree", () => this.activate());
     this.addCommand({ id: "open", name: t("cmdOpen"), callback: () => this.activate() });
     this.addCommand({ id: "create-example", name: t("cmdExample"), callback: () => this.createExample() });
+    const withView = (fn) => async () => {
+      await this.activate();
+      const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+      if (leaf && leaf.view instanceof SkillTreeView) fn(leaf.view);
+    };
+    this.addCommand({ id: "find-skill", name: t("cmdFind"), callback: withView(v => v.openSearch()) });
+    this.addCommand({ id: "whats-next", name: t("cmdNext"), callback: withView(v => v.toggleNext(true)) });
     this.addSettingTab(new SkillTreeSettingTab(this.app, this));
   }
 
